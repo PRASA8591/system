@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMS ELITE | System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body { font-family: 'Inter', sans-serif; display: flex; height: 100vh; background: #f8fafc; overflow: hidden; }
+        
+        /* Sidebar */
+        aside { width: 260px; background: #0f172a; color: #94a3b8; display: flex; flex-direction: column; transition: 0.3s; z-index: 50; }
+        aside.hide { width: 0; overflow: hidden; }
+        .nav-item { padding: 12px 20px; cursor: pointer; display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 13px; transition: 0.2s; border-left: 4px solid transparent; }
+        .nav-item:hover, .nav-item.active { background: #1e293b; color: white; border-left-color: #3b82f6; }
+        
+        /* Main Content */
+        main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #f1f5f9; }
+        header { height: 64px; background: white; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; padding: 0 24px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        #page-content { flex: 1; padding: 24px; overflow-y: auto; }
+
+        /* Components */
+        .card { background: white; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; }
+        .btn { padding: 10px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+        .btn:active { transform: translateY(1px); }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-success { background: #22c55e; color: white; }
+        
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { background: #f8fafc; padding: 12px 16px; text-align: left; font-weight: 700; color: #64748b; text-transform: uppercase; font-size: 11px; border-bottom: 2px solid #e2e8f0; }
+        td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+        tr:hover td { background: #f8fafc; }
+
+        /* Modal */
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(2px); }
+        .modal.active { display: flex; animation: fadeIn 0.2s ease-out; }
+        .modal-card { background: white; width: 100%; max-width: 600px; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-height: 90vh; display: flex; flex-direction: column; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        
+        /* Inputs */
+        input, select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; outline: none; transition: 0.2s; }
+        input:focus, select:focus { border-color: #3b82f6; ring: 2px solid #bfdbfe; }
+
+        /* Print */
+        @media print { 
+            aside, header, .no-print { display: none !important; } 
+            #page-content { padding: 0; } 
+            .card { border: none; shadow: none; }
+        }
+    </style>
+</head>
+<body>
+
+<aside id="sidebar">
+    <div class="p-6 flex items-center gap-3 border-b border-slate-800">
+        <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-black text-white italic">I</div>
+        <div class="font-black text-xl text-white italic tracking-tight">IMS <span class="text-blue-500">ELITE</span></div>
+    </div>
+    
+    <div id="nav-list" class="flex-1 overflow-y-auto py-4 space-y-1">
+        </div>
+
+    <div class="p-4 bg-slate-900 border-t border-slate-800">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-white">👤</div>
+            <div class="overflow-hidden">
+                <div class="text-xs font-bold text-blue-400 uppercase tracking-wider truncate" id="disp-loc">Loading...</div>
+                <div class="text-sm font-bold text-white truncate" id="disp-user">Loading...</div>
+            </div>
+        </div>
+    </div>
+</aside>
+
+<main>
+    <header>
+        <div class="flex items-center gap-4">
+            <button onclick="toggleSidebar()" class="text-slate-500 hover:text-slate-800 transition">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+            </button>
+            <h2 id="page-title" class="text-xl font-black text-slate-800 tracking-tight uppercase">Dashboard</h2>
+        </div>
+        <button onclick="logout()" class="text-red-500 font-bold text-xs bg-red-50 px-3 py-2 rounded hover:bg-red-100 transition border border-red-100">LOGOUT</button>
+    </header>
+
+    <div id="page-content">
+        </div>
+</main>
+
+<div id="modal" class="modal">
+    <div class="modal-card">
+        <div class="p-5 border-b flex justify-between items-center bg-slate-50">
+            <h3 id="m-title" class="font-black text-slate-800 text-lg">Title</h3>
+            <button onclick="closeModal()" class="text-slate-400 hover:text-red-500 font-bold text-xl">&times;</button>
+        </div>
+        <div id="m-body" class="p-6 overflow-y-auto"></div>
+        <div id="m-footer" class="p-5 border-t bg-slate-50 flex justify-end gap-3"></div>
+    </div>
+</div>
+
+<script>
+    // --- 1. SYSTEM INITIALIZATION ---
+    const db = new Dexie("IMS_ELITE_PRO");
+    db.version(1).stores({
+        items: '++id, code, name',
+        suppliers: '++id, name',
+        locations: '++id, name',
+        users: '++id, username',
+        stocks: '++id, itemCode, loc, qty, exp',
+        docs: '++id, docNo, type, status, fromLoc, toLoc',
+        history: '++id, date, itemCode, user, type, docNo, fromLoc, toLoc, qty'
+    });
+
+    // Security Check
+    const user = JSON.parse(sessionStorage.getItem('user'));
+    const loc = sessionStorage.getItem('loc');
+    if(!user || !loc) window.location.href = 'index.html';
+
+    // UI Setup
+    document.getElementById('disp-user').innerText = user.fullName;
+    document.getElementById('disp-loc').innerText = loc;
+
+    const PAGES = [
+        {id: 'dashboard', n: 'Dashboard', i: '📊'}, 
+        {id: 'stock_check', n: 'Stock Check', i: '🔍'},
+        {id: 'items', n: 'Item Master', i: '📦'}, 
+        {id: 'suppliers', n: 'Suppliers', i: '🚛'},
+        {id: 'locations', n: 'Locations', i: '🏢'}, 
+        {id: 'users', n: 'User Access', i: '👥'},
+        {id: 'direct_add', n: 'Direct Stock', i: '➕'}, 
+        {id: 'po', n: 'Purchase Orders', i: '📝'},
+        {id: 'grn', n: 'GRN Receive', i: '📥'}, 
+        {id: 'transfer_out', n: 'Transfer Out', i: '🛫'},
+        {id: 'transfer_in', n: 'Transfer In', i: '🛬'}, 
+        {id: 'verification', n: 'Audit / Adjust', i: '⚖️'},
+        {id: 'bincard', n: 'Bin Card', i: '📋'}, 
+        {id: 'billing', n: 'Billing / POS', i: '📠'},
+        {id: 'reports', n: 'Reports', i: '📈'}
+    ];
+
+    async function initNav() {
+        // Fetch current location's enabled pages
+        const locData = await db.locations.where({name: loc}).first();
+        if(!locData) { alert("Location Error"); logout(); return; }
+
+        const html = PAGES.map(p => {
+            // Check if page exists for this location AND if user has permission
+            const locHasPage = locData.pages.includes(p.id);
+            const userHasPerm = user.username === 'admin' || (user.permissions && user.permissions.includes(p.id));
+            
+            if(locHasPage && userHasPerm) {
+                return `<div onclick="loadPage('${p.id}')" class="nav-item" id="nav-${p.id}">
+                    <span class="text-lg">${p.i}</span> ${p.n}
+                </div>`;
+            }
+            return '';
+        }).join('');
+        document.getElementById('nav-list').innerHTML = html;
+        
+        // Load default page
+        loadPage('dashboard');
+    }
+
+    // --- 2. CORE UTILITIES ---
+    function toggleSidebar() { document.getElementById('sidebar').classList.toggle('hide'); }
+    function logout() { sessionStorage.clear(); window.location.href = 'index.html'; }
+    
+    function openModal(title, body, footer) {
+        document.getElementById('m-title').innerText = title;
+        document.getElementById('m-body').innerHTML = body;
+        document.getElementById('m-footer').innerHTML = footer || `<button onclick="closeModal()" class="btn bg-slate-200">Close</button>`;
+        document.getElementById('modal').classList.add('active');
+    }
+    function closeModal() { document.getElementById('modal').classList.remove('active'); }
+
+    function confirmAction(msg, actionCallback) {
+        openModal(
+            "⚠️ Confirmation Required", 
+            `<div class="text-center font-bold text-slate-700 py-4">${msg}</div>`, 
+            `<button onclick="closeModal()" class="btn bg-slate-200">Cancel</button>
+             <button id="conf-btn" class="btn btn-primary">Yes, Confirm</button>`
+        );
+        document.getElementById('conf-btn').onclick = async () => {
+            await actionCallback();
+            closeModal();
+        };
+    }
+
+    async function generateID(prefix, table) {
+        const count = await db[table].count();
+        return prefix + (count + 1).toString().padStart(6, '0');
+    }
+
+    // --- 3. PAGE LOGIC: DASHBOARD ---
+    async function loadDashboard() {
+        const stocks = await db.stocks.where({loc: loc}).toArray();
+        const items = await db.items.toArray();
+        
+        let val = 0, exp = 0, short = 0, low = 0;
+        const now = new Date();
+        const next30 = new Date(); next30.setDate(now.getDate() + 30);
+
+        stocks.forEach(s => {
+            const item = items.find(i => i.code === s.itemCode);
+            if(item) val += (s.qty * item.cost);
+            if(s.qty < 10) low++;
+            if(s.exp) {
+                const d = new Date(s.exp);
+                if(d < now) exp++;
+                else if(d < next30) short++;
+            }
+        });
+
+        const cards = [
+            {t: 'Total Stock Value', v: val.toLocaleString(), c: 'border-blue-500 text-blue-600', k:'val'},
+            {t: 'Expired Items', v: exp, c: 'border-red-500 text-red-600', k:'exp'},
+            {t: 'Short Expiry (<30 Days)', v: short, c: 'border-orange-500 text-orange-600', k:'short'},
+            {t: 'Low Stock Alerts', v: low, c: 'border-yellow-500 text-yellow-600', k:'low'}
+        ];
+
+        document.getElementById('page-content').innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                ${cards.map(c => `
+                <div onclick="viewDash('${c.k}')" class="bg-white p-6 rounded-xl shadow-sm border-l-4 ${c.c} cursor-pointer hover:shadow-md transition">
+                    <div class="text-xs font-bold uppercase text-slate-400 mb-1">${c.t}</div>
+                    <div class="text-3xl font-black">${c.v}</div>
+                </div>`).join('')}
+            </div>
+            <div class="mt-8 bg-white p-6 rounded-xl border shadow-sm">
+                <h3 class="font-bold text-slate-700 mb-4">Quick Actions</h3>
+                <div class="flex gap-4">
+                    <button onclick="loadPage('billing')" class="btn btn-primary">Start New Bill</button>
+                    <button onclick="loadPage('po')" class="btn bg-slate-800 text-white">Create Purchase Order</button>
+                </div>
+            </div>`;
+    }
+
+    async function viewDash(type) {
+        const stocks = await db.stocks.where({loc: loc}).toArray();
+        const items = await db.items.toArray();
+        const now = new Date();
+        const next30 = new Date(); next30.setDate(now.getDate() + 30);
+        
+        let filtered = [];
+        if(type === 'val') filtered = stocks;
+        if(type === 'exp') filtered = stocks.filter(s => s.exp && new Date(s.exp) < now);
+        if(type === 'short') filtered = stocks.filter(s => s.exp && new Date(s.exp) >= now && new Date(s.exp) < next30);
+        if(type === 'low') filtered = stocks.filter(s => s.qty < 10);
+
+        const rows = filtered.map(s => {
+            const i = items.find(x => x.code === s.itemCode);
+            return `<tr><td>${s.itemCode}</td><td>${i?.name||'-'}</td><td>${s.qty}</td><td>${s.exp||'-'}</td></tr>`;
+        }).join('');
+        
+        openModal("Details View", `<table><thead><tr><th>Code</th><th>Item</th><th>Qty</th><th>Exp</th></tr></thead><tbody>${rows}</tbody></table>`);
+    }
+
+    // --- 4. PAGE LOGIC: STOCK CHECK ---
+    async function loadStockCheck() {
+        document.getElementById('page-content').innerHTML = `
+            <div class="card p-6">
+                <input id="sc-search" placeholder="🔍 Search Item Code or Name..." class="mb-4" onkeyup="renderStockCheck()">
+                <div id="sc-table" class="overflow-x-auto"></div>
+            </div>`;
+        renderStockCheck();
+    }
+
+    async function renderStockCheck() {
+        const q = document.getElementById('sc-search').value.toLowerCase();
+        const stocks = await db.stocks.where({loc: loc}).toArray();
+        const items = await db.items.toArray();
+        
+        // Group by Item Code
+        const grouped = {};
+        stocks.forEach(s => {
+            if(!grouped[s.itemCode]) grouped[s.itemCode] = {qty: 0, batches: []};
+            grouped[s.itemCode].qty += s.qty;
+            grouped[s.itemCode].batches.push(s);
+        });
+
+        const rows = Object.keys(grouped).map(code => {
+            const item = items.find(i => i.code === code);
+            const name = item ? item.name : 'Unknown';
+            if(!code.toLowerCase().includes(q) && !name.toLowerCase().includes(q)) return '';
+            
+            return `<tr class="border-b-2 border-slate-100">
+                <td class="font-bold text-blue-600">${code}</td>
+                <td class="font-bold">${name}</td>
+                <td class="text-right font-black text-lg">${grouped[code].qty}</td>
+                <td><button onclick='viewBatches(${JSON.stringify(grouped[code].batches)})' class="text-xs bg-slate-100 px-2 py-1 rounded">View Batches</button></td>
+            </tr>`;
+        }).join('');
+
+        document.getElementById('sc-table').innerHTML = `<table><thead><tr><th>Code</th><th>Name</th><th class="text-right">Total Qty</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    
+    function viewBatches(batches) {
+        const rows = batches.map(b => `<tr><td>${b.exp || 'N/A'}</td><td>${b.qty}</td></tr>`).join('');
+        openModal("Batch Details", `<table><thead><tr><th>Exp Date</th><th>Qty</th></tr></thead><tbody>${rows}</tbody></table>`);
+    }
+
+    // --- 5. PAGE LOGIC: ITEM MANAGEMENT ---
+    async function loadItems() {
+        const items = await db.items.toArray();
+        document.getElementById('page-content').innerHTML = `
+            <div class="flex justify-between mb-4">
+                <h3 class="font-bold text-xl">Item Master</h3>
+                <button onclick="itemModal()" class="btn btn-primary">+ New Item</button>
+            </div>
+            <div class="card overflow-hidden">
+                <table><thead><tr><th>Code</th><th>Name</th><th>Pack</th><th>Cost</th><th>Sell</th><th>Actions</th></tr></thead>
+                <tbody>${items.map(i => `
+                    <tr>
+                        <td>${i.code}</td><td>${i.name}</td><td>${i.pack}</td><td>${i.cost.toFixed(2)}</td><td>${i.sell.toFixed(2)}</td>
+                        <td>
+                            <button onclick="itemModal(${i.id})" class="text-blue-600 font-bold mr-2">Edit</button>
+                            <button onclick="delItem(${i.id})" class="text-red-500 font-bold">Delete</button>
+                        </td>
+                    </tr>`).join('')}</tbody>
+                </table>
+            </div>`;
+    }
+
+    async function itemModal(id=null) {
+        let data = { code: await generateID('ITEM', 'items'), name:'', pack:'', cost:'', sell:'' };
+        if(id) data = await db.items.get(id);
+
+        const body = `
+            <div class="grid gap-4">
+                <div><label class="text-xs font-bold uppercase">Item Code</label><input value="${data.code}" disabled class="bg-slate-100 font-mono"></div>
+                <div><label class="text-xs font-bold uppercase">Item Name</label><input id="i-name" value="${data.name}"></div>
+                <div><label class="text-xs font-bold uppercase">Pack Size</label><input id="i-pack" value="${data.pack}"></div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="text-xs font-bold uppercase">Cost Price</label><input type="number" id="i-cost" value="${data.cost}"></div>
+                    <div><label class="text-xs font-bold uppercase">Selling Price</label><input type="number" id="i-sell" value="${data.sell}"></div>
+                </div>
+            </div>`;
+            
+        openModal(id?"Edit Item":"Create Item", body, 
+            `<button onclick="saveItem(${id}, '${data.code}')" class="btn btn-primary">Save Item</button>`);
+    }
+
+    async function saveItem(id, code) {
+        const obj = {
+            code,
+            name: document.getElementById('i-name').value,
+            pack: document.getElementById('i-pack').value,
+            cost: parseFloat(document.getElementById('i-cost').value) || 0,
+            sell: parseFloat(document.getElementById('i-sell').value) || 0
+        };
+        confirmAction(id ? "Update this item?" : "Create this new item?", async () => {
+            if(id) await db.items.update(id, obj); else await db.items.add(obj);
+            loadItems();
+        });
+    }
+    async function delItem(id) { confirmAction("Delete this item permanently?", async () => { await db.items.delete(id); loadItems(); }); }
+
+    // --- 6. PAGE LOGIC: SUPPLIERS ---
+    async function loadSuppliers() {
+        const list = await db.suppliers.toArray();
+        document.getElementById('page-content').innerHTML = `
+            <div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Suppliers</h3><button onclick="supModal()" class="btn btn-primary">+ New Supplier</button></div>
+            <div class="card"><table><thead><tr><th>Name</th><th>Contact</th><th>Actions</th></tr></thead><tbody>
+            ${list.map(s => `<tr><td>${s.name}</td><td>${s.contact}</td><td><button onclick="supModal(${s.id})" class="text-blue-600 font-bold mr-2">Edit</button><button onclick="delSup(${s.id})" class="text-red-500 font-bold">Delete</button></td></tr>`).join('')}
+            </tbody></table></div>`;
+    }
+    async function supModal(id=null) {
+        const d = id ? await db.suppliers.get(id) : {name:'', contact:''};
+        openModal("Supplier Details", `<div class="grid gap-3"><input id="s-n" value="${d.name}" placeholder="Name"><input id="s-c" value="${d.contact}" placeholder="Contact Info"></div>`, 
+        `<button onclick="saveSup(${id})" class="btn btn-primary">Save</button>`);
+    }
+    async function saveSup(id) {
+        const obj = {name: document.getElementById('s-n').value, contact: document.getElementById('s-c').value};
+        confirmAction("Save Supplier?", async () => { if(id) await db.suppliers.update(id, obj); else await db.suppliers.add(obj); loadSuppliers(); });
+    }
+    async function delSup(id) { confirmAction("Delete Supplier?", async () => { await db.suppliers.delete(id); loadSuppliers(); }); }
+
+    // --- 7. PAGE LOGIC: LOCATIONS (WIZARD) ---
+    async function loadLocations() {
+        const list = await db.locations.toArray();
+        document.getElementById('page-content').innerHTML = `
+            <div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Locations</h3><button onclick="locWiz1()" class="btn btn-primary">+ New Location</button></div>
+            <div class="card"><table><thead><tr><th>Name</th><th>Remark</th><th>Pages Access</th><th>Actions</th></tr></thead><tbody>
+            ${list.map(l => `<tr><td>${l.name}</td><td>${l.remark}</td><td>${l.pages.length} Pages</td><td><button onclick="locWiz1(${l.id})" class="text-blue-600 font-bold mr-2">Edit</button><button onclick="delLoc(${l.id})" class="text-red-500 font-bold">Delete</button></td></tr>`).join('')}
+            </tbody></table></div>`;
+    }
+    async function locWiz1(id=null) {
+        const d = id ? await db.locations.get(id) : {name:'', remark:''};
+        openModal("Step 1: Location Info", `<div class="grid gap-3"><input id="l-n" value="${d.name}" placeholder="Location Name"><input id="l-r" value="${d.remark}" placeholder="Remark"></div>`, 
+        `<button onclick="locWiz2(${id})" class="btn btn-primary">Next &rarr;</button>`);
+    }
+    async function locWiz2(id) {
+        const name = document.getElementById('l-n').value;
+        const remark = document.getElementById('l-r').value;
+        const current = id ? (await db.locations.get(id)).pages : [];
+        const checks = PAGES.map(p => `<label class="flex items-center gap-2 p-2 border rounded hover:bg-slate-50 cursor-pointer"><input type="checkbox" value="${p.id}" class="pg-chk" ${current.includes(p.id)?'checked':''}> ${p.n}</label>`).join('');
+        openModal("Step 2: Page Access", `<div class="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto">${checks}</div>`, 
+        `<button onclick="saveLoc(${id}, '${name}', '${remark}')" class="btn btn-primary">Create Location</button>`);
+    }
+    async function saveLoc(id, name, remark) {
+        const pages = Array.from(document.querySelectorAll('.pg-chk:checked')).map(x => x.value);
+        confirmAction("Save Location?", async () => { if(id) await db.locations.update(id, {name, remark, pages}); else await db.locations.add({name, remark, pages}); loadLocations(); });
+    }
+    async function delLoc(id) { confirmAction("Delete Location?", async () => { await db.locations.delete(id); loadLocations(); }); }
+
+    // --- 8. PAGE LOGIC: USERS (WIZARD) ---
+    async function loadUsers() {
+        const list = await db.users.toArray();
+        document.getElementById('page-content').innerHTML = `
+            <div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Users</h3><button onclick="usrWiz1()" class="btn btn-primary">+ New User</button></div>
+            <div class="card"><table><thead><tr><th>Username</th><th>Full Name</th><th>Access Locations</th><th>Actions</th></tr></thead><tbody>
+            ${list.map(u => `<tr><td>${u.username}</td><td>${u.fullName}</td><td>${u.allowedLocs?.length||0}</td><td><button onclick="usrWiz1(${u.id})" class="text-blue-600 font-bold mr-2">Edit</button><button onclick="delUser(${u.id})" class="text-red-500 font-bold">Delete</button></td></tr>`).join('')}
+            </tbody></table></div>`;
+    }
+    async function usrWiz1(id=null) {
+        const d = id ? await db.users.get(id) : {username:'', fullName:'', password:''};
+        openModal("Step 1: User Credentials", `<div class="grid gap-3">
+            <input id="u-f" value="${d.fullName}" placeholder="Full Name">
+            <input id="u-u" value="${d.username}" placeholder="Username">
+            <input id="u-p" value="${d.password}" type="password" placeholder="Password">
+        </div>`, `<button onclick="usrWiz2(${id})" class="btn btn-primary">Next &rarr;</button>`);
+    }
+    async function usrWiz2(id) {
+        const d = { f: document.getElementById('u-f').value, u: document.getElementById('u-u').value, p: document.getElementById('u-p').value };
+        const locs = await db.locations.toArray();
+        const curLocs = id ? (await db.users.get(id)).allowedLocs : [];
+        const checks = locs.map(l => `<label class="flex items-center gap-2 p-2 border rounded"><input type="checkbox" value="${l.name}" class="loc-chk" ${curLocs.includes(l.name)?'checked':''}> ${l.name}</label>`).join('');
+        openModal("Step 2: Allowed Locations", `<div class="grid grid-cols-2 gap-2">${checks}</div>`, `<button onclick="usrWiz3(${id}, '${d.f}', '${d.u}', '${d.p}')" class="btn btn-primary">Next &rarr;</button>`);
+    }
+    async function usrWiz3(id, f, u, p) {
+        const allowedLocs = Array.from(document.querySelectorAll('.loc-chk:checked')).map(x => x.value);
+        const curPerms = id ? (await db.users.get(id)).permissions : [];
+        const checks = PAGES.map(pg => `<label class="flex items-center gap-2 p-2 border rounded"><input type="checkbox" value="${pg.id}" class="perm-chk" ${curPerms.includes(pg.id)?'checked':''}> ${pg.n}</label>`).join('');
+        openModal("Step 3: Page Permissions", `<div class="grid grid-cols-2 gap-2">${checks}</div>`, `<button onclick="saveUser(${id}, '${f}', '${u}', '${p}', ${JSON.stringify(allowedLocs)})" class="btn btn-primary">Save User</button>`);
+    }
+    async function saveUser(id, fullName, username, password, allowedLocs) {
+        const permissions = Array.from(document.querySelectorAll('.perm-chk:checked')).map(x => x.value);
+        confirmAction("Save User?", async () => {
+            const obj = {fullName, username, password, allowedLocs, permissions};
+            if(id) await db.users.update(id, obj); else await db.users.add(obj);
+            loadUsers();
+        });
+    }
+    async function delUser(id) { confirmAction("Delete User?", async () => { await db.users.delete(id); loadUsers(); }); }
+
+    // --- 9. PAGE LOGIC: DIRECT STOCK ---
+    async function loadDirectAdd() {
+        const items = await db.items.toArray();
+        document.getElementById('page-content').innerHTML = `
+            <div class="max-w-md mx-auto card p-8">
+                <h3 class="font-black text-2xl text-center mb-6">Direct Stock Add</h3>
+                <label class="text-xs font-bold uppercase">Item</label>
+                <select id="da-item" class="mb-4">${items.map(i => `<option value="${i.code}">${i.code} - ${i.name}</option>`)}</select>
+                <label class="text-xs font-bold uppercase">Quantity</label>
+                <input type="number" id="da-qty" class="mb-4">
+                <label class="text-xs font-bold uppercase">Expiry Date</label>
+                <input type="date" id="da-exp" class="mb-6">
+                <button onclick="saveDirectAdd()" class="w-full btn btn-primary justify-center text-lg py-3">ADD STOCK</button>
+            </div>`;
+    }
+    async function saveDirectAdd() {
+        const itemCode = document.getElementById('da-item').value;
+        const qty = parseFloat(document.getElementById('da-qty').value);
+        const exp = document.getElementById('da-exp').value;
+        if(!qty) return alert("Enter Qty");
+        confirmAction("Confirm Stock Add?", async () => {
+            await db.stocks.add({itemCode, loc, qty, exp});
+            await db.history.add({date: new Date(), itemCode, user: user.fullName, type: 'DIRECT ADD', qty, loc, docNo: 'N/A'});
+            alert("Added!"); loadDirectAdd();
+        });
+    }
+
+    // --- 10. PAGE LOGIC: BILLING / POS ---
+    let cart = [];
+    async function loadBilling() {
+        const items = await db.items.toArray();
+        document.getElementById('page-content').innerHTML = `
+            <div class="flex flex-col md:flex-row gap-6 h-[calc(100vh-140px)]">
+                <div class="flex-1 card p-4 flex flex-col">
+                    <div class="flex gap-2 mb-4">
+                        <select id="pos-item" class="flex-1 text-lg py-3">${items.map(i=>`<option value="${i.code}" data-price="${i.sell}">${i.name} ($${i.sell})</option>`)}</select>
+                        <input type="number" id="pos-qty" value="1" class="w-24 text-center font-bold text-lg">
+                        <button onclick="addToCart()" class="btn btn-primary px-6">ADD</button>
+                    </div>
+                    <div class="flex-1 overflow-auto border rounded bg-slate-50 p-2">
+                        <table><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th></th></tr></thead>
+                        <tbody id="cart-body"></tbody></table>
+                    </div>
+                </div>
+                <div class="w-full md:w-80 bg-slate-900 text-white rounded-xl p-6 flex flex-col justify-between shadow-xl">
+                    <div>
+                        <h2 class="text-sm font-bold opacity-50 uppercase tracking-widest">Total Payable</h2>
+                        <div id="pos-total" class="text-5xl font-black mt-2 tracking-tight">0.00</div>
+                    </div>
+                    <div class="space-y-3">
+                        <input id="pos-disc" type="number" placeholder="Discount Amount" class="bg-slate-800 border-none text-white placeholder-slate-500" onkeyup="renderCart()">
+                        <button onclick="checkout()" class="w-full btn btn-success py-4 text-xl justify-center font-black">COMPLETE SALE</button>
+                    </div>
+                </div>
+            </div>`;
+    }
+    
+    function addToCart() {
+        const sel = document.getElementById('pos-item');
+        const code = sel.value;
+        const name = sel.options[sel.selectedIndex].text.split(' ($')[0];
+        const price = parseFloat(sel.options[sel.selectedIndex].dataset.price);
+        const qty = parseFloat(document.getElementById('pos-qty').value);
+        
+        cart.push({code, name, price, qty});
+        renderCart();
+    }
+    
+    function renderCart() {
+        const body = document.getElementById('cart-body');
+        let sub = 0;
+        body.innerHTML = cart.map((c, i) => {
+            const tot = c.price * c.qty;
+            sub += tot;
+            return `<tr><td>${c.name}</td><td>${c.qty}</td><td>${c.price}</td><td>${tot.toFixed(2)}</td>
+            <td><button onclick="cart.splice(${i},1);renderCart()" class="text-red-500 font-bold">&times;</button></td></tr>`;
+        }).join('');
+        
+        const disc = parseFloat(document.getElementById('pos-disc').value) || 0;
+        document.getElementById('pos-total').innerText = (sub - disc).toFixed(2);
+    }
+    
+    async function checkout() {
+        if(cart.length === 0) return alert("Cart Empty");
+        const total = document.getElementById('pos-total').innerText;
+        const docNo = await generateID('BILL', 'docs');
+        
+        confirmAction(`Confirm Sale of ${total}?`, async () => {
+            // Deduct Stock
+            for(let c of cart) {
+                // Find batch to deduct (FIFO logic simplified: take from first available)
+                const s = await db.stocks.where({itemCode: c.code, loc: loc}).first();
+                if(s) await db.stocks.update(s.id, {qty: s.qty - c.qty});
+                // Log
+                await db.history.add({date: new Date(), itemCode: c.code, user: user.fullName, type: 'SALE', qty: -c.qty, loc, docNo});
+            }
+            // Save Bill
+            await db.docs.add({docNo, type: 'BILL', total, items: cart, date: new Date()});
+            
+            // Print
+            const w = window.open('','','width=300,height=600');
+            w.document.write(`<html><body><h3>BILL ${docNo}</h3><hr>${cart.map(x=>`<div>${x.name} x${x.qty} ${x.price*x.qty}</div>`).join('')}<hr><h2>TOTAL: ${total}</h2></body></html>`);
+            w.print(); w.close();
+            
+            cart = []; loadBilling();
+        });
+    }
+
+    // --- 11. PAGE LOGIC: PURCHASE ORDERS (PO) ---
+    async function loadPO() {
+        const docs = await db.docs.where({type: 'PO'}).toArray();
+        document.getElementById('page-content').innerHTML = `
+            <div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Purchase Orders</h3><button onclick="createPO()" class="btn btn-primary">+ New PO</button></div>
+            <div class="card"><table><thead><tr><th>PO#</th><th>Supplier</th><th>Status</th><th>Action</th></tr></thead><tbody>
+            ${docs.map(d => `<tr><td>${d.docNo}</td><td>${d.supplier}</td>
+            <td><span class="px-2 py-1 rounded text-xs font-bold ${d.status==='PENDING'?'bg-orange-100 text-orange-600':'bg-green-100 text-green-600'}">${d.status}</span></td>
+            <td><button onclick='viewPO(${JSON.stringify(d)})' class="text-blue-600 font-bold">View</button>
+            ${d.status==='PENDING' ? `<button onclick="convertToGRN('${d.docNo}')" class="ml-2 text-green-600 font-bold">GRN &rarr;</button>` : ''}
+            </td></tr>`).join('')}
+            </tbody></table></div>`;
+    }
+    
+    async function createPO() {
+        const sup = await db.suppliers.toArray();
+        const items = await db.items.toArray();
+        const id = await generateID('PO', 'docs');
+        window.tempItems = [];
+        
+        const body = `
+            <div class="mb-4"><b>PO #: ${id}</b></div>
+            <select id="po-sup" class="mb-2">${sup.map(s=>`<option>${s.name}</option>`)}</select>
+            <div class="flex gap-2 bg-slate-50 p-3 rounded border">
+                <select id="po-item" class="flex-1">${items.map(i=>`<option value="${i.code}">${i.name}</option>`)}</select>
+                <input id="po-qty" type="number" placeholder="Qty" class="w-20">
+                <button onclick="addTempItem()" class="btn btn-primary text-xs">Add</button>
+            </div>
+            <div id="po-list" class="mt-2 text-sm max-h-40 overflow-y-auto"></div>`;
+        
+        openModal("Create Purchase Order", body, `<button onclick="savePO('${id}')" class="btn btn-primary">Confirm PO</button>`);
+    }
+
+    function addTempItem() {
+        const i = document.getElementById('po-item').value;
+        const q = document.getElementById('po-qty').value;
+        window.tempItems.push({code: i, qty: q});
+        document.getElementById('po-list').innerHTML = window.tempItems.map(x=>`<div>${x.code} - Qty: ${x.qty}</div>`).join('');
+    }
+
+    async function savePO(docNo) {
+        const supplier = document.getElementById('po-sup').value;
+        confirmAction("Create PO?", async () => {
+            await db.docs.add({docNo, type: 'PO', supplier, items: window.tempItems, status: 'PENDING', date: new Date()});
+            loadPO();
+        });
+    }
+
+    // --- 12. PAGE LOGIC: GRN ---
+    async function loadGRN() {
+        document.getElementById('page-content').innerHTML = `
+            <div class="card p-6 max-w-2xl mx-auto">
+                <h3 class="font-bold mb-4">Create GRN from PO</h3>
+                <div class="flex gap-2">
+                    <input id="grn-po" placeholder="Enter PO Number (e.g. PO000001)">
+                    <button onclick="convertToGRN(document.getElementById('grn-po').value)" class="btn btn-primary">Load PO</button>
+                </div>
+                <div id="grn-area" class="mt-6"></div>
+            </div>`;
+    }
+
+    async function convertToGRN(poNo) {
+        const po = await db.docs.where({docNo: poNo, type: 'PO'}).first();
+        if(!po) return alert("Invalid PO");
+        const grnNo = await generateID('GRN', 'docs');
+        
+        // Auto-switch to GRN page if called from PO page
+        if(document.getElementById('nav-grn')) loadPage('grn'); 
+        
+        setTimeout(() => { // ensure DOM update
+            document.getElementById('grn-area').innerHTML = `
+                <div class="border p-4 rounded bg-slate-50">
+                    <div class="flex justify-between font-bold mb-4"><span>GRN: ${grnNo}</span><span>Ref: ${poNo}</span></div>
+                    <table><thead><tr><th>Item</th><th>Ord Qty</th><th>Recv Qty</th><th>Exp Date</th></tr></thead>
+                    <tbody>${po.items.map((it, i) => `
+                        <tr>
+                            <td>${it.code}</td><td>${it.qty}</td>
+                            <td><input id="g-q-${i}" value="${it.qty}" type="number" class="w-20 p-1"></td>
+                            <td><input id="g-e-${i}" type="date" class="p-1"></td>
+                        </tr>`).join('')}
+                    </tbody></table>
+                    <button onclick="saveGRN('${grnNo}','${poNo}',${po.items.length}, ${JSON.stringify(po.items).replace(/"/g, '&quot;')})" class="w-full btn btn-success mt-4 justify-center">COMPLETE GRN</button>
+                </div>`;
+        }, 100);
+    }
+
+    async function saveGRN(grn, poRef, len, poItems) {
+        confirmAction("Confirm Goods Receipt?", async () => {
+            for(let i=0; i<len; i++) {
+                const item = poItems[i];
+                const qty = parseFloat(document.getElementById(`g-q-${i}`).value);
+                const exp = document.getElementById(`g-e-${i}`).value;
+                
+                await db.stocks.add({itemCode: item.code, loc, qty, exp});
+                await db.history.add({date: new Date(), itemCode: item.code, user: user.fullName, type: 'GRN', qty, loc, docNo: grn});
+            }
+            await db.docs.add({docNo: grn, type: 'GRN', ref: poRef, date: new Date()});
+            await db.docs.where({docNo: poRef}).modify({status: 'RECEIVED'});
+            alert("GRN Created & Stock Added"); loadPage('dashboard');
+        });
+    }
+
+    // --- 13. PAGE LOGIC: TRANSFERS ---
+    async function loadTransferOut() {
+        const locs = await db.locations.toArray();
+        const items = await db.items.toArray();
+        const trId = await generateID('TR', 'docs');
+        window.tempTr = [];
+        
+        document.getElementById('page-content').innerHTML = `
+            <div class="card p-6 max-w-3xl mx-auto">
+                <div class="flex justify-between mb-6"><h3 class="font-bold text-xl">Transfer Out</h3><span class="font-mono bg-slate-100 p-2 rounded">${trId}</span></div>
+                <label class="text-xs font-bold uppercase">Destination Location</label>
+                <select id="tr-dest" class="mb-4">${locs.filter(l=>l.name!==loc).map(l=>`<option>${l.name}</option>`)}</select>
+                
+                <div class="bg-slate-50 p-4 rounded border mb-4">
+                    <div class="flex gap-2 mb-2">
+                        <select id="tr-item" class="flex-1" onchange="loadBatches(this.value)">${items.map(i=>`<option value="${i.code}">${i.name}</option>`)}</select>
+                        <select id="tr-batch" class="flex-1"><option>Select Batch...</option></select>
+                        <input id="tr-qty" type="number" placeholder="Qty" class="w-24">
+                        <button onclick="addTrItem()" class="btn btn-primary">Add</button>
+                    </div>
+                    <div id="tr-list" class="text-sm"></div>
+                </div>
+                <button onclick="saveTr('${trId}')" class="w-full btn btn-primary justify-center">CONFIRM TRANSFER</button>
+            </div>`;
+        if(items.length) loadBatches(items[0].code);
+    }
+
+    async function loadBatches(code) {
+        const s = await db.stocks.where({itemCode: code, loc: loc}).toArray();
+        document.getElementById('tr-batch').innerHTML = s.map(x => `<option value="${x.id}">Exp: ${x.exp} (Avl: ${x.qty})</option>`).join('');
+    }
+
+    function addTrItem() {
+        const b = document.getElementById('tr-batch');
+        const q = document.getElementById('tr-qty').value;
+        const code = document.getElementById('tr-item').value;
+        window.tempTr.push({batchId: parseInt(b.value), qty: parseFloat(q), code});
+        document.getElementById('tr-list').innerHTML = window.tempTr.map(x=>`<div>${x.code} - ${x.qty}</div>`).join('');
+    }
+
+    async function saveTr(docNo) {
+        const toLoc = document.getElementById('tr-dest').value;
+        confirmAction("Send Transfer?", async () => {
+            for(let line of window.tempTr) {
+                const s = await db.stocks.get(line.batchId);
+                await db.stocks.update(line.batchId, {qty: s.qty - line.qty});
+                await db.history.add({date: new Date(), itemCode: line.code, user: user.fullName, type: 'TR-OUT', qty: -line.qty, loc, docNo});
+            }
+            await db.docs.add({docNo, type: 'TRANSFER', fromLoc: loc, toLoc, items: window.tempTr, status: 'TRANSIT', date: new Date()});
+            alert("Transfer Sent"); loadDashboard();
+        });
+    }
+
+    // --- 14. PAGE LOGIC: TRANSFER IN ---
+    async function loadTransferIn() {
+        const incoming = await db.docs.where({toLoc: loc, type: 'TRANSFER', status: 'TRANSIT'}).toArray();
+        document.getElementById('page-content').innerHTML = `
+            <h3 class="font-bold text-xl mb-4">Incoming Transfers</h3>
+            <div class="card"><table><thead><tr><th>Doc #</th><th>From</th><th>Items</th><th>Action</th></tr></thead><tbody>
+            ${incoming.map(d => `<tr><td>${d.docNo}</td><td>${d.fromLoc}</td><td>${d.items.length} Lines</td>
+            <td><button onclick="recvTr(${d.id})" class="btn btn-success py-1 px-3 text-xs">Receive Stock</button></td></tr>`).join('')}
+            </tbody></table></div>`;
+    }
+
+    async function recvTr(id) {
+        const doc = await db.docs.get(id);
+        confirmAction("Accept Transfer to Stock?", async () => {
+            for(let i of doc.items) {
+                await db.stocks.add({itemCode: i.code, loc, qty: i.qty, exp: 'TRANSFER'});
+                await db.history.add({date: new Date(), itemCode: i.code, user: user.fullName, type: 'TR-IN', qty: i.qty, loc, docNo: doc.docNo});
+            }
+            await db.docs.update(id, {status: 'RECEIVED'});
+            loadTransferIn();
+        });
+    }
+
+    // --- 15. UTILS: BINCARD & VERIFICATION ---
+    async function loadBincard() {
+        const items = await db.items.toArray();
+        document.getElementById('page-content').innerHTML = `
+            <select id="bin-sel" class="mb-4 card p-3" onchange="renderBin(this.value)">${items.map(i=>`<option value="${i.code}">${i.name}</option>`)}</select>
+            <div id="bin-view" class="card"></div>`;
+        if(items.length) renderBin(items[0].code);
+    }
+
+    async function renderBin(code) {
+        const hist = await db.history.where({itemCode: code, loc: loc}).reverse().toArray();
+        document.getElementById('bin-view').innerHTML = `<table><thead><tr><th>Date</th><th>Doc</th><th>Type</th><th>User</th><th class="text-right">Qty</th></tr></thead><tbody>
+        ${hist.map(h => `<tr><td>${new Date(h.date).toLocaleDateString()}</td><td>${h.docNo}</td><td>${h.type}</td><td>${h.user}</td><td class="text-right font-bold ${h.qty<0?'text-red-500':'text-green-600'}">${h.qty}</td></tr>`).join('')}
+        </tbody></table>`;
+    }
+
+    async function loadVerification() {
+        const items = await db.items.toArray();
+        document.getElementById('page-content').innerHTML = `
+            <div class="card p-6 max-w-lg mx-auto">
+                <h3 class="font-bold mb-4">Stock Adjustment</h3>
+                <select id="adj-item" class="mb-4 w-full border p-2 rounded">${items.map(i=>`<option value="${i.code}">${i.name}</option>`)}</select>
+                <input id="adj-qty" type="number" placeholder="Qty (+/-)" class="mb-4 w-full border p-2 rounded">
+                <button onclick="saveAdj()" class="w-full btn btn-primary">POST ADJUSTMENT</button>
+            </div>`;
+    }
+    
+    async function saveAdj() {
+        const code = document.getElementById('adj-item').value;
+        const qty = parseFloat(document.getElementById('adj-qty').value);
+        confirmAction("Post Adjustment?", async () => {
+            await db.stocks.add({itemCode: code, loc, qty, exp: 'AUDIT'});
+            await db.history.add({date: new Date(), itemCode: code, user: user.fullName, type: 'AUDIT', qty, loc, docNo: 'ADJ'});
+            alert("Adjusted"); loadVerification();
+        });
+    }
+
+    // --- 16. REPORTS ---
+    async function loadReports() {
+        document.getElementById('page-content').innerHTML = `
+            <div class="card p-8 text-center">
+                <h3 class="text-2xl font-bold mb-4">System Reports</h3>
+                <div class="flex gap-4 justify-center">
+                    <button onclick="genRep('stock')" class="btn btn-primary">Current Stock Report</button>
+                    <button onclick="genRep('sales')" class="btn btn-primary">Sales Report</button>
+                </div>
+            </div>`;
+    }
+    
+    async function genRep(type) {
+        let html = '';
+        if(type === 'stock') {
+            const s = await db.stocks.where({loc: loc}).toArray();
+            html = `<h2>Stock Report: ${loc}</h2><table><thead><tr><th>Code</th><th>Qty</th><th>Exp</th></tr></thead><tbody>
+            ${s.map(x=>`<tr><td>${x.itemCode}</td><td>${x.qty}</td><td>${x.exp||'-'}</td></tr>`).join('')}</tbody></table>`;
+        }
+        if(type === 'sales') {
+            const h = await db.history.where({type: 'SALE', loc: loc}).toArray();
+            html = `<h2>Sales Report: ${loc}</h2><table><thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Doc</th></tr></thead><tbody>
+            ${h.map(x=>`<tr><td>${new Date(x.date).toLocaleDateString()}</td><td>${x.itemCode}</td><td>${Math.abs(x.qty)}</td><td>${x.docNo}</td></tr>`).join('')}</tbody></table>`;
+        }
+        const w = window.open();
+        w.document.write(`<style>table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;padding:8px}</style>${html}`);
+        w.print();
+    }
+
+    // --- NAV LOADER ---
+    function loadPage(id) {
+        document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
+        document.getElementById('nav-'+id)?.classList.add('active');
+        document.getElementById('page-title').innerText = PAGES.find(p=>p.id===id).n;
+        
+        // Dispatcher
+        if(id === 'dashboard') loadDashboard();
+        if(id === 'stock_check') loadStockCheck();
+        if(id === 'items') loadItems();
+        if(id === 'suppliers') loadSuppliers();
+        if(id === 'locations') loadLocations();
+        if(id === 'users') loadUsers();
+        if(id === 'direct_add') loadDirectAdd();
+        if(id === 'po') loadPO();
+        if(id === 'grn') loadGRN();
+        if(id === 'transfer_out') loadTransferOut();
+        if(id === 'transfer_in') loadTransferIn();
+        if(id === 'verification') loadVerification();
+        if(id === 'bincard') loadBincard();
+        if(id === 'billing') loadBilling();
+        if(id === 'reports') loadReports();
+    }
+
+    // Start
+    initNav();
+</script>
+</body>
+</html>
