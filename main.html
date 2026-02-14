@@ -29,6 +29,7 @@
         .btn-danger { background: #ef4444; color: white; }
         .btn-danger:hover { background: #dc2626; }
         .btn-success { background: #22c55e; color: white; }
+        .btn-secondary { background: #64748b; color: white; }
         
         /* Tables */
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -43,15 +44,9 @@
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         
         /* Inputs */
-        input, select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; outline: none; transition: 0.2s; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; outline: none; transition: 0.2s; margin-bottom: 8px; }
         input:focus, select:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px #bfdbfe; }
-
-        /* Print */
-        @media print { 
-            aside, header, .no-print { display: none !important; } 
-            #page-content { padding: 0; } 
-            .card { border: none; box-shadow: none; }
-        }
+        label { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #64748b; display: block; margin-bottom: 4px; }
     </style>
 </head>
 <body>
@@ -61,9 +56,7 @@
         <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-black text-white italic">I</div>
         <div class="font-black text-xl text-white italic tracking-tight">IMS <span class="text-blue-500">ELITE</span></div>
     </div>
-    
     <div id="nav-list" class="flex-1 overflow-y-auto py-4 space-y-1"></div>
-
     <div class="p-4 bg-slate-900 border-t border-slate-800">
         <div class="flex items-center gap-3">
             <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-white">👤</div>
@@ -85,7 +78,6 @@
         </div>
         <button onclick="logout()" class="text-red-500 font-bold text-xs bg-red-50 px-3 py-2 rounded hover:bg-red-100 transition border border-red-100">LOGOUT</button>
     </header>
-
     <div id="page-content"></div>
 </main>
 
@@ -102,7 +94,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, where, getDoc, limit, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, where, getDoc, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDNpEbBt638KQGgkD4EvtqrRvInupP55zM",
@@ -117,7 +109,6 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // --- 1. SYSTEM INITIALIZATION ---
     const user = JSON.parse(sessionStorage.getItem('user'));
     const loc = sessionStorage.getItem('loc');
     if(!user || !loc) window.location.href = 'index.html';
@@ -155,7 +146,7 @@
         window.loadPage('dashboard');
     }
 
-    // --- 2. CORE UTILITIES ---
+    // --- UTILITIES ---
     window.toggleSidebar = () => document.getElementById('sidebar').classList.toggle('hide');
     window.logout = () => { sessionStorage.clear(); window.location.href = 'index.html'; };
     window.closeModal = () => document.getElementById('modal').classList.remove('active');
@@ -188,570 +179,188 @@
         await addDoc(collection(db, "history"), { date: new Date().toISOString(), itemCode, user: user.fullName, type, qty, loc, docNo, fromLoc, toLoc });
     }
 
-    // --- 3. PAGE LOGIC: DASHBOARD ---
+    window.printDoc = (title, metaHtml, tableHtml) => {
+        const w = window.open('','','width=800,height=800');
+        w.document.write(`<html><body style="font-family: sans-serif; padding: 40px;">
+            <div style="text-align:center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 20px;"><h1>${title}</h1><h3>IMS ELITE SYSTEM</h3></div>
+            <div style="margin-bottom: 20px; font-size: 14px;">${metaHtml}</div>
+            <table style="width:100%; border-collapse: collapse; font-size: 12px;" border="1">${tableHtml}</table>
+            <div style="margin-top: 40px; font-size: 12px; text-align: center; color: #888;">Generated on ${new Date().toLocaleString()} by ${user.fullName}</div>
+        </body></html>`);
+        w.print(); w.close();
+    };
+
+    // --- 1. DASHBOARD ---
     window.loadDashboard = async () => {
         const sSnap = await getDocs(query(collection(db, "stocks"), where("loc", "==", loc)));
         const iSnap = await getDocs(collection(db, "items"));
         const stocks = sSnap.docs.map(d => d.data());
         const items = iSnap.docs.map(d => d.data());
-        
-        let val = 0, exp = 0, low = 0;
-        const now = new Date();
-
+        let val = 0, exp = 0, low = 0; const now = new Date();
         stocks.forEach(s => {
             const item = items.find(i => i.code === s.itemCode);
             if(item) val += (s.qty * item.cost);
             if(s.qty < 10) low++;
-            if(s.exp && s.exp !== 'AUDIT' && s.exp !== 'DIRECT') {
-                if(new Date(s.exp) < now) exp++;
-            }
+            if(s.exp && s.exp !== 'AUDIT' && s.exp !== 'DIRECT' && new Date(s.exp) < now) exp++;
         });
-
         document.getElementById('page-content').innerHTML = `
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div class="card p-6 border-l-4 border-blue-500 text-blue-600">
-                    <div class="text-xs font-bold uppercase text-slate-400 mb-1">Total Stock Value</div>
-                    <div class="text-3xl font-black">Rs ${val.toLocaleString(undefined, {minimumFractionDigits:2})}</div>
-                </div>
-                <div class="card p-6 border-l-4 border-red-500 text-red-600">
-                    <div class="text-xs font-bold uppercase text-slate-400 mb-1">Expired Items</div>
-                    <div class="text-3xl font-black">${exp}</div>
-                </div>
-                <div class="card p-6 border-l-4 border-yellow-500 text-yellow-600">
-                    <div class="text-xs font-bold uppercase text-slate-400 mb-1">Low Stock Alerts</div>
-                    <div class="text-3xl font-black">${low}</div>
-                </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div onclick="window.dashDetail('val')" class="card p-6 border-l-4 border-blue-500 text-blue-600 cursor-pointer hover:shadow-lg"><div class="text-xs font-bold uppercase text-slate-400 mb-1">Stock Value</div><div class="text-3xl font-black">Rs ${val.toLocaleString(undefined, {minimumFractionDigits:2})}</div></div>
+                <div onclick="window.dashDetail('exp')" class="card p-6 border-l-4 border-red-500 text-red-600 cursor-pointer hover:shadow-lg"><div class="text-xs font-bold uppercase text-slate-400 mb-1">Expired Items</div><div class="text-3xl font-black">${exp}</div></div>
+                <div onclick="window.dashDetail('low')" class="card p-6 border-l-4 border-yellow-500 text-yellow-600 cursor-pointer hover:shadow-lg"><div class="text-xs font-bold uppercase text-slate-400 mb-1">Low Stock Alerts</div><div class="text-3xl font-black">${low}</div></div>
             </div>`;
     };
-
-    // --- 4. PAGE LOGIC: STOCK CHECK (ALL ITEMS VISIBLE) ---
-    window.loadStockCheck = async () => {
-        document.getElementById('page-content').innerHTML = `
-            <div class="card p-6">
-                <input id="sc-search" placeholder="🔍 Search Item Code or Name..." class="mb-4" onkeyup="window.renderStockCheck()">
-                <div id="sc-table" class="overflow-x-auto"></div>
-            </div>`;
-        window.renderStockCheck();
+    window.dashDetail = async (type) => {
+        const sSnap = await getDocs(query(collection(db, "stocks"), where("loc", "==", loc)));
+        const iSnap = await getDocs(collection(db, "items"));
+        const stocks = sSnap.docs.map(d => d.data()); const items = iSnap.docs.map(d => d.data()); const now = new Date();
+        let filtered = [];
+        if(type === 'val') filtered = stocks;
+        if(type === 'exp') filtered = stocks.filter(s => s.exp && s.exp.includes('-') && new Date(s.exp) < now);
+        if(type === 'low') filtered = stocks.filter(s => s.qty < 10);
+        const rows = filtered.map(s => { const i = items.find(x => x.code === s.itemCode); return `<tr><td>${s.itemCode}</td><td>${i?.name||'-'}</td><td>${s.qty}</td><td>${s.exp||'-'}</td></tr>`; }).join('');
+        openModal("Details", `<table><thead><tr><th>Code</th><th>Item</th><th>Qty</th><th>Exp</th></tr></thead><tbody>${rows}</tbody></table>`);
     };
 
+    // --- 2. STOCK CHECK ---
+    window.loadStockCheck = async () => { document.getElementById('page-content').innerHTML = `<div class="card p-6"><input id="sc-search" placeholder="🔍 Search..." class="mb-4" onkeyup="window.renderStockCheck()"><div id="sc-table" class="overflow-x-auto"></div></div>`; window.renderStockCheck(); };
     window.renderStockCheck = async () => {
         const q = document.getElementById('sc-search').value.toLowerCase();
-        
-        // 1. Fetch ALL Items
         const iSnap = await getDocs(collection(db, "items"));
-        const items = iSnap.docs.map(d => d.data());
-        
-        // 2. Fetch Stock for Current Location
         const sSnap = await getDocs(query(collection(db, "stocks"), where("loc", "==", loc)));
-        const stocks = sSnap.docs.map(d => d.data());
-        
-        // 3. Map Stock to Items
         const grouped = {};
-        stocks.forEach(s => {
-            if(!grouped[s.itemCode]) grouped[s.itemCode] = {qty: 0, batches: []};
-            grouped[s.itemCode].qty += s.qty;
-            grouped[s.itemCode].batches.push(s);
-        });
-
+        sSnap.docs.forEach(d => { const s=d.data(); if(!grouped[s.itemCode]) grouped[s.itemCode]={qty:0, batches:[]}; grouped[s.itemCode].qty+=s.qty; grouped[s.itemCode].batches.push(s); });
         window.currentBatches = grouped; 
-
-        // 4. Render Row for EVERY Item
-        const rows = items.map(item => {
-            const code = item.code;
-            const name = item.name;
-            const stockData = grouped[code] || {qty: 0, batches: []};
-            
-            if(!code.toLowerCase().includes(q) && !name.toLowerCase().includes(q)) return '';
-            
-            return `<tr class="border-b-2 border-slate-100">
-                <td class="font-bold text-blue-600">${code}</td>
-                <td class="font-bold">${name}</td>
-                <td class="text-right font-black text-lg ${stockData.qty===0?'text-slate-300':'text-slate-800'}">${stockData.qty}</td>
-                <td>
-                    ${stockData.qty > 0 ? `<button onclick="window.viewBatches('${code}')" class="text-xs bg-slate-100 px-2 py-1 rounded font-bold">View Batches</button>` : '-'}
-                </td>
-            </tr>`;
+        const rows = iSnap.docs.map(d => {
+            const i=d.data(); const s=grouped[i.code]||{qty:0, batches:[]};
+            if(!i.code.toLowerCase().includes(q) && !i.name.toLowerCase().includes(q)) return '';
+            return `<tr class="border-b-2 border-slate-100"><td class="font-bold text-blue-600">${i.code}</td><td class="font-bold">${i.name}</td><td class="text-right font-black text-lg ${s.qty===0?'text-slate-300':'text-slate-800'}">${s.qty}</td><td>${s.qty>0?`<button onclick="window.viewBatches('${i.code}')" class="text-xs bg-slate-100 px-2 py-1 rounded font-bold">View</button>`:'-'}</td></tr>`;
         }).join('');
-        
-        document.getElementById('sc-table').innerHTML = `<table><thead><tr><th>Code</th><th>Name</th><th class="text-right">Total Qty</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table>`;
+        document.getElementById('sc-table').innerHTML = `<table><thead><tr><th>Code</th><th>Name</th><th class="text-right">Total</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table>`;
     };
-    
-    window.viewBatches = (code) => {
-        const batches = window.currentBatches[code].batches;
-        const rows = batches.map(b => `<tr><td>${b.exp || 'N/A'}</td><td>${b.qty}</td></tr>`).join('');
-        openModal(`Batch Details: ${code}`, `<table><thead><tr><th>Exp Date</th><th>Qty</th></tr></thead><tbody>${rows}</tbody></table>`);
-    };
+    window.viewBatches = (c) => { const rows = window.currentBatches[c].batches.map(b => `<tr><td>${b.exp || 'N/A'}</td><td>${b.qty}</td></tr>`).join(''); openModal(`Batches: ${c}`, `<table><thead><tr><th>Exp</th><th>Qty</th></tr></thead><tbody>${rows}</tbody></table>`); };
 
-    // --- 5. PAGE LOGIC: ITEM MASTER (FIXED BUTTONS) ---
-    window.tempItemData = {}; // State
-    window.loadItems = async () => {
-        const iSnap = await getDocs(collection(db, "items"));
-        const items = iSnap.docs.map(d => ({id: d.id, ...d.data()}));
-        document.getElementById('page-content').innerHTML = `
-            <div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Item Master</h3><button onclick="window.itemModal()" class="btn btn-primary">+ New Item</button></div>
-            <div class="card overflow-hidden">
-                <table><thead><tr><th>Code</th><th>Name</th><th>Cost</th><th>Sell</th><th>Actions</th></tr></thead>
-                <tbody>${items.map(i => `<tr><td>${i.code}</td><td>${i.name}</td><td>${i.cost}</td><td>${i.sell}</td>
-                        <td><button onclick="window.itemModal('${i.id}')" class="text-blue-600 font-bold mr-2">Edit</button>
-                            <button onclick="window.confirmAction('Delete Item?', 'delItem', '${i.id}')" class="text-red-500 font-bold">Delete</button></td></tr>`).join('')}</tbody>
-                </table>
-            </div>`;
+    // --- 3. ITEMS & 4. SUPPLIERS (WITH LABELS) ---
+    window.tempData = {}; 
+    window.loadItems = async () => { const snap = await getDocs(collection(db, "items")); document.getElementById('page-content').innerHTML = `<div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Items</h3><button onclick="window.itemModal()" class="btn btn-primary">+ New</button></div><div class="card"><table><thead><tr><th>Code</th><th>Name</th><th>Sell</th><th>Action</th></tr></thead><tbody>${snap.docs.map(d => `<tr><td>${d.data().code}</td><td>${d.data().name}</td><td>${d.data().sell}</td><td><button onclick="window.itemModal('${d.id}')" class="text-blue-600 mr-2">Edit</button><button onclick="window.confirmAction('Delete?', 'delItem', '${d.id}')" class="text-red-500">Delete</button></td></tr>`).join('')}</tbody></table></div>`; };
+    window.itemModal = async (id=null) => { 
+        let d = { code: await generateID('ITEM', 'items'), name:'', cost:0, sell:0 }; if(id) d = (await getDoc(doc(db, "items", id))).data(); 
+        window.tempData = {id, ...d}; 
+        openModal(id?"Edit":"New", `<div class="grid gap-2"><label>Item Code</label><input value="${d.code}" disabled class="bg-slate-100"><label>Item Name</label><input id="i-n" value="${d.name}" placeholder="Enter Name"><label>Cost Price</label><input id="i-c" value="${d.cost}" type="number" placeholder="0.00"><label>Selling Price</label><input id="i-s" value="${d.sell}" type="number" placeholder="0.00"></div>`, `<button onclick="window.prepareItem()" class="btn btn-primary">Save</button>`); 
     };
-
-    window.itemModal = async (id=null) => {
-        // Load data to Temp State
-        let data = { code: await generateID('ITEM', 'items'), name:'', pack:'', cost:'', sell:'' };
-        if(id) data = (await getDoc(doc(db, "items", id))).data();
-        window.tempItemData = data;
-        window.tempItemData.id = id; // Store ID if exists
-
-        const body = `
-            <div class="grid gap-4">
-                <div><label class="text-xs font-bold uppercase">Item Code</label><input value="${data.code}" disabled class="bg-slate-100 font-mono"></div>
-                <div><label class="text-xs font-bold uppercase">Item Name</label><input id="i-name" value="${data.name}"></div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="text-xs font-bold uppercase">Cost Price</label><input type="number" id="i-cost" value="${data.cost}"></div>
-                    <div><label class="text-xs font-bold uppercase">Selling Price</label><input type="number" id="i-sell" value="${data.sell}"></div>
-                </div>
-            </div>`;
-        openModal(id?"Edit Item":"Create Item", body, `<button onclick="window.prepareItemSave()" class="btn btn-primary">Save Item</button>`);
-    };
-
-    window.prepareItemSave = () => {
-        // Capture inputs to Temp State
-        window.tempItemData.name = document.getElementById('i-name').value;
-        window.tempItemData.cost = parseFloat(document.getElementById('i-cost').value) || 0;
-        window.tempItemData.sell = parseFloat(document.getElementById('i-sell').value) || 0;
-        window.confirmAction('Save Item?', 'saveItem');
-    };
-
-    window.saveItem = async () => {
-        const id = window.tempItemData.id;
-        const obj = { code: window.tempItemData.code, name: window.tempItemData.name, cost: window.tempItemData.cost, sell: window.tempItemData.sell };
-        if(id) await updateDoc(doc(db, "items", id), obj); 
-        else await addDoc(collection(db, "items"), obj);
-        window.loadItems();
-    };
+    window.prepareItem = () => { window.tempData.name=document.getElementById('i-n').value; window.tempData.cost=parseFloat(document.getElementById('i-c').value); window.tempData.sell=parseFloat(document.getElementById('i-s').value); window.confirmAction('Save Item?', 'saveItem'); };
+    window.saveItem = async () => { if(window.tempData.id) await updateDoc(doc(db, "items", window.tempData.id), window.tempData); else await addDoc(collection(db, "items"), window.tempData); window.loadItems(); };
     window.delItem = async (id) => { await deleteDoc(doc(db, "items", id)); window.loadItems(); };
 
-    // --- 6. PAGE LOGIC: SUPPLIERS (FIXED BUTTONS) ---
-    window.tempSup = {};
-    window.loadSuppliers = async () => {
-        const sSnap = await getDocs(collection(db, "suppliers"));
-        const list = sSnap.docs.map(d => ({id: d.id, ...d.data()}));
-        document.getElementById('page-content').innerHTML = `
-            <div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Suppliers</h3><button onclick="window.supModal()" class="btn btn-primary">+ New Supplier</button></div>
-            <div class="card"><table><thead><tr><th>Name</th><th>Contact</th><th>Actions</th></tr></thead><tbody>
-            ${list.map(s => `<tr><td>${s.name}</td><td>${s.contact}</td><td><button onclick="window.supModal('${s.id}')" class="text-blue-600 font-bold mr-2">Edit</button><button onclick="window.confirmAction('Delete?', 'delSup', '${s.id}')" class="text-red-500 font-bold">Delete</button></td></tr>`).join('')}
-            </tbody></table></div>`;
+    window.loadSuppliers = async () => { const snap = await getDocs(collection(db, "suppliers")); document.getElementById('page-content').innerHTML = `<div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Suppliers</h3><button onclick="window.supModal()" class="btn btn-primary">+ New</button></div><div class="card"><table><thead><tr><th>Name</th><th>Contact</th><th>Action</th></tr></thead><tbody>${snap.docs.map(d => `<tr><td>${d.data().name}</td><td>${d.data().contact}</td><td><button onclick="window.supModal('${d.id}')" class="text-blue-600 mr-2">Edit</button><button onclick="window.confirmAction('Delete?', 'delSup', '${d.id}')" class="text-red-500">Delete</button></td></tr>`).join('')}</tbody></table></div>`; };
+    window.supModal = async (id=null) => { 
+        let d = {name:'', contact:''}; if(id) d = (await getDoc(doc(db, "suppliers", id))).data(); window.tempData = {id, ...d}; 
+        openModal("Supplier", `<div class="grid gap-2"><label>Supplier Name</label><input id="s-n" value="${d.name}" placeholder="Name"><label>Contact</label><input id="s-c" value="${d.contact}" placeholder="Phone/Email"></div>`, `<button onclick="window.prepareSup()" class="btn btn-primary">Save</button>`); 
     };
-    window.supModal = async (id=null) => {
-        const d = id ? (await getDoc(doc(db, "suppliers", id))).data() : {name:'', contact:''};
-        window.tempSup = d; window.tempSup.id = id;
-        openModal("Supplier Details", `<div class="grid gap-3"><input id="s-n" value="${d.name}" placeholder="Name"><input id="s-c" value="${d.contact}" placeholder="Contact Info"></div>`, 
-        `<button onclick="window.prepareSupSave()" class="btn btn-primary">Save</button>`);
-    };
-    window.prepareSupSave = () => {
-        window.tempSup.name = document.getElementById('s-n').value;
-        window.tempSup.contact = document.getElementById('s-c').value;
-        window.confirmAction('Save Supplier?', 'saveSup');
-    }
-    window.saveSup = async () => {
-        const obj = {name: window.tempSup.name, contact: window.tempSup.contact};
-        if(window.tempSup.id) await updateDoc(doc(db, "suppliers", window.tempSup.id), obj); 
-        else await addDoc(collection(db, "suppliers"), obj); 
-        window.loadSuppliers();
-    };
+    window.prepareSup = () => { window.tempData.name=document.getElementById('s-n').value; window.tempData.contact=document.getElementById('s-c').value; window.confirmAction('Save Supplier?', 'saveSup'); };
+    window.saveSup = async () => { if(window.tempData.id) await updateDoc(doc(db, "suppliers", window.tempData.id), window.tempData); else await addDoc(collection(db, "suppliers"), window.tempData); window.loadSuppliers(); };
     window.delSup = async (id) => { await deleteDoc(doc(db, "suppliers", id)); window.loadSuppliers(); };
 
-    // --- 7. LOCATIONS & 8. USERS (Wizards - already fixed) ---
-    // (Codes from previous fix retained for brevity, they were working fine)
-    window.tempLoc = {};
-    window.loadLocations = async () => {
-        const lSnap = await getDocs(collection(db, "locations"));
-        const list = lSnap.docs.map(d => ({id: d.id, ...d.data()}));
-        document.getElementById('page-content').innerHTML = `
-            <div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Locations</h3><button onclick="window.locWiz1()" class="btn btn-primary">+ New Location</button></div>
-            <div class="card"><table><thead><tr><th>Name</th><th>Remark</th><th>Pages Access</th><th>Actions</th></tr></thead><tbody>
-            ${list.map(l => `<tr><td>${l.name}</td><td>${l.remark}</td><td>${l.pages.length} Pages</td><td><button onclick="window.locWiz1('${l.id}')" class="text-blue-600 font-bold mr-2">Edit</button><button onclick="window.confirmAction('Delete?', 'delLoc', '${l.id}')" class="text-red-500 font-bold">Delete</button></td></tr>`).join('')}
-            </tbody></table></div>`;
-    };
-    window.locWiz1 = async (id=null) => {
-        const d = id ? (await getDoc(doc(db, "locations", id))).data() : {name:'', remark:'', pages:[]};
-        window.tempLoc = d; 
-        openModal("Step 1: Info", `<div class="grid gap-3"><input id="l-n" value="${d.name}" placeholder="Name"><input id="l-r" value="${d.remark}" placeholder="Remark"></div>`, `<button onclick="window.locWiz2('${id||''}')" class="btn btn-primary">Next &rarr;</button>`);
-    };
-    window.locWiz2 = async (id) => {
-        window.tempLoc.name = document.getElementById('l-n').value;
-        window.tempLoc.remark = document.getElementById('l-r').value;
-        const checks = PAGES.map(p => `<label class="flex items-center gap-2 p-2 border rounded"><input type="checkbox" value="${p.id}" class="pg-chk" ${window.tempLoc.pages.includes(p.id)?'checked':''}> ${p.n}</label>`).join('');
-        openModal("Step 2: Access", `<div class="grid grid-cols-2 gap-2 max-h-96 overflow-y-auto">${checks}</div>`, `<button onclick="window.prepareLocSave('${id}')" class="btn btn-primary">Save</button>`);
-    };
-    window.prepareLocSave = (id) => { window.tempLoc.pages = Array.from(document.querySelectorAll('.pg-chk:checked')).map(x => x.value); window.confirmAction('Save?', 'saveLoc', id); };
-    window.saveLoc = async (id) => { if(id) await updateDoc(doc(db, "locations", id), window.tempLoc); else await addDoc(collection(db, "locations"), window.tempLoc); window.loadLocations(); };
+    // --- 5. LOCATIONS & 6. USERS (WITH LABELS) ---
+    window.loadLocations = async () => { const snap=await getDocs(collection(db,"locations")); document.getElementById('page-content').innerHTML=`<div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Locations</h3><button onclick="window.locWiz1()" class="btn btn-primary">+ New</button></div><div class="card"><table>${snap.docs.map(d=>`<tr><td>${d.data().name}</td><td><button onclick="window.locWiz1('${d.id}')" class="text-blue-600 mr-2">Edit</button><button onclick="window.confirmAction('Delete?', 'delLoc', '${d.id}')" class="text-red-500">Delete</button></td></tr>`).join('')}</table></div>`; };
+    window.locWiz1 = async (id=null) => { const d=id?(await getDoc(doc(db,"locations",id))).data():{name:'',pages:[]}; window.tempData={id,...d}; openModal("Step 1", `<label>Location Name</label><input id="l-n" value="${d.name}" placeholder="Warehouse Name">`, `<button onclick="window.locWiz2()" class="btn btn-primary">Next</button>`); };
+    window.locWiz2 = () => { window.tempData.name=document.getElementById('l-n').value; const checks=PAGES.map(p=>`<label><input type="checkbox" value="${p.id}" class="pg-chk" ${window.tempData.pages.includes(p.id)?'checked':''}> ${p.n}</label>`).join('<br>'); openModal("Step 2: Access", `<div style="height:300px;overflow:auto">${checks}</div>`, `<button onclick="window.prepareLoc()" class="btn btn-primary">Save</button>`); };
+    window.prepareLoc = () => { window.tempData.pages=Array.from(document.querySelectorAll('.pg-chk:checked')).map(x=>x.value); window.confirmAction('Save?', 'saveLoc'); };
+    window.saveLoc = async () => { if(window.tempData.id) await updateDoc(doc(db,"locations",window.tempData.id),window.tempData); else await addDoc(collection(db,"locations"),window.tempData); window.loadLocations(); };
     window.delLoc = async (id) => { await deleteDoc(doc(db, "locations", id)); window.loadLocations(); };
 
-    window.tempUser = {};
-    window.loadUsers = async () => {
-        const uSnap = await getDocs(collection(db, "users"));
-        const list = uSnap.docs.map(d => ({id: d.id, ...d.data()}));
-        document.getElementById('page-content').innerHTML = `
-            <div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Users</h3><button onclick="window.usrWiz1()" class="btn btn-primary">+ New User</button></div>
-            <div class="card"><table><thead><tr><th>Username</th><th>Name</th></tr></thead><tbody>${list.map(u => `<tr><td>${u.username}</td><td>${u.fullName}</td></tr>`).join('')}</tbody></table></div>`;
-    };
-    window.usrWiz1 = async (id=null) => {
-        const d = id ? (await getDoc(doc(db, "users", id))).data() : {username:'', fullName:'', password:'', allowedLocs:[], permissions:[]};
-        window.tempUser = d; 
-        openModal("Step 1: Credentials", `<div class="grid gap-3"><input id="u-f" value="${d.fullName}" placeholder="Name"><input id="u-u" value="${d.username}" placeholder="Username"><input id="u-p" value="${d.password}" type="password" placeholder="Pass"></div>`, `<button onclick="window.usrWiz2('${id||''}')" class="btn btn-primary">Next &rarr;</button>`);
-    };
-    window.usrWiz2 = async (id) => {
-        window.tempUser.fullName = document.getElementById('u-f').value; window.tempUser.username = document.getElementById('u-u').value; window.tempUser.password = document.getElementById('u-p').value;
-        const lSnap = await getDocs(collection(db, "locations"));
-        const checks = lSnap.docs.map(l => `<label class="flex gap-2 p-2 border rounded"><input type="checkbox" value="${l.data().name}" class="loc-chk" ${window.tempUser.allowedLocs.includes(l.data().name)?'checked':''}> ${l.data().name}</label>`).join('');
-        openModal("Step 2: Locations", `<div class="grid grid-cols-2 gap-2">${checks}</div>`, `<button onclick="window.usrWiz3('${id}')" class="btn btn-primary">Next &rarr;</button>`);
-    };
-    window.usrWiz3 = async (id) => {
-        window.tempUser.allowedLocs = Array.from(document.querySelectorAll('.loc-chk:checked')).map(x => x.value);
-        const checks = PAGES.map(pg => `<label class="flex gap-2 p-2 border rounded"><input type="checkbox" value="${pg.id}" class="perm-chk" ${window.tempUser.permissions.includes(pg.id)?'checked':''}> ${pg.n}</label>`).join('');
-        openModal("Step 3: Permissions", `<div class="grid grid-cols-2 gap-2">${checks}</div>`, `<button onclick="window.prepareUserSave('${id}')" class="btn btn-primary">Save User</button>`);
-    };
-    window.prepareUserSave = (id) => { window.tempUser.permissions = Array.from(document.querySelectorAll('.perm-chk:checked')).map(x => x.value); window.confirmAction('Save?', 'saveUser', id); };
-    window.saveUser = async (id) => { if(id) await updateDoc(doc(db, "users", id), window.tempUser); else await addDoc(collection(db, "users"), window.tempUser); window.loadUsers(); };
+    window.loadUsers = async () => { const snap=await getDocs(collection(db,"users")); document.getElementById('page-content').innerHTML=`<div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Users</h3><button onclick="window.usrWiz1()" class="btn btn-primary">+ New</button></div><div class="card"><table>${snap.docs.map(d=>`<tr><td>${d.data().username}</td><td><button onclick="window.usrWiz1('${d.id}')" class="text-blue-600 mr-2">Edit</button><button onclick="window.confirmAction('Delete?', 'delUsr', '${d.id}')" class="text-red-500">Delete</button></td></tr>`).join('')}</table></div>`; };
+    window.usrWiz1 = async (id=null) => { const d=id?(await getDoc(doc(db,"users",id))).data():{username:'',fullName:'',password:'',allowedLocs:[],permissions:[]}; window.tempData={id,...d}; openModal("Step 1", `<label>Username</label><input id="u-u" value="${d.username}" placeholder="Login ID"><label>Full Name</label><input id="u-f" value="${d.fullName}" placeholder="Display Name"><label>Password</label><input id="u-p" value="${d.password}" placeholder="Secret Key">`, `<button onclick="window.usrWiz2()" class="btn btn-primary">Next</button>`); };
+    window.usrWiz2 = async () => { window.tempData.username=document.getElementById('u-u').value; window.tempData.fullName=document.getElementById('u-f').value; window.tempData.password=document.getElementById('u-p').value; const l=await getDocs(collection(db,"locations")); const c=l.docs.map(x=>`<label><input type="checkbox" value="${x.data().name}" class="loc-chk" ${window.tempData.allowedLocs.includes(x.data().name)?'checked':''}> ${x.data().name}</label>`).join('<br>'); openModal("Step 2: Locations", c, `<button onclick="window.usrWiz3()" class="btn btn-primary">Next</button>`); };
+    window.usrWiz3 = () => { window.tempData.allowedLocs=Array.from(document.querySelectorAll('.loc-chk:checked')).map(x=>x.value); const c=PAGES.map(p=>`<label><input type="checkbox" value="${p.id}" class="perm-chk" ${window.tempData.permissions.includes(p.id)?'checked':''}> ${p.n}</label>`).join('<br>'); openModal("Step 3: Permissions", `<div style="height:300px;overflow:auto">${c}</div>`, `<button onclick="window.prepareUsr()" class="btn btn-primary">Save</button>`); };
+    window.prepareUsr = () => { window.tempData.permissions=Array.from(document.querySelectorAll('.perm-chk:checked')).map(x=>x.value); window.confirmAction('Save?', 'saveUsr'); };
+    window.saveUsr = async () => { if(window.tempData.id) await updateDoc(doc(db,"users",window.tempData.id),window.tempData); else await addDoc(collection(db,"users"),window.tempData); window.loadUsers(); };
+    window.delUsr = async (id) => { await deleteDoc(doc(db, "users", id)); window.loadUsers(); };
 
-    // --- 9. PAGE LOGIC: DIRECT STOCK ---
-    window.loadDirectAdd = async () => {
-        const iSnap = await getDocs(collection(db, "items"));
-        document.getElementById('page-content').innerHTML = `
-            <div class="max-w-md mx-auto card p-8">
-                <h3 class="font-black text-2xl text-center mb-6">Direct Stock Add</h3>
-                <label class="text-xs font-bold uppercase">Item</label>
-                <select id="da-item" class="mb-4">${iSnap.docs.map(i => `<option value="${i.data().code}">${i.data().code} - ${i.data().name}</option>`)}</select>
-                <label class="text-xs font-bold uppercase">Quantity</label>
-                <input type="number" id="da-qty" class="mb-4">
-                <label class="text-xs font-bold uppercase">Expiry Date</label>
-                <input type="date" id="da-exp" class="mb-6">
-                <button onclick="window.confirmAction('Confirm Add?', 'saveDirectAdd')" class="w-full btn btn-primary justify-center text-lg py-3">ADD STOCK</button>
-            </div>`;
-    };
-    window.saveDirectAdd = async () => {
-        const itemCode = document.getElementById('da-item').value, qty = parseFloat(document.getElementById('da-qty').value), exp = document.getElementById('da-exp').value;
-        if(!qty) return alert("Enter Qty");
-        await addDoc(collection(db, "stocks"), {itemCode, loc, qty, exp});
-        await logHistory(itemCode, 'DIRECT ADD', qty);
-        alert("Added!"); window.loadDirectAdd();
-    };
+    // --- 7. DIRECT STOCK ---
+    window.loadDirectAdd = async () => { const snap=await getDocs(collection(db,"items")); document.getElementById('page-content').innerHTML=`<div class="card p-6 max-w-md mx-auto"><h3 class="font-bold mb-4">Direct Stock</h3><label>Item</label><select id="da-i" class="mb-4">${snap.docs.map(i=>`<option value="${i.data().code}">${i.data().name}</option>`)}</select><label>Quantity</label><input id="da-q" type="number" placeholder="Qty" class="mb-4"><label>Expiry</label><input id="da-e" type="date" class="mb-4"><button onclick="window.confirmAction('Add?','saveDA')" class="btn btn-primary w-full">Add</button></div>`; };
+    window.saveDA = async () => { const i=document.getElementById('da-i').value, q=parseFloat(document.getElementById('da-q').value), e=document.getElementById('da-e').value; await addDoc(collection(db,"stocks"),{itemCode:i,loc,qty:q,exp:e}); await logHistory(i,'DIRECT',q); alert("Added"); window.loadDirectAdd(); };
 
-    // --- 10. PAGE LOGIC: BILLING / POS (CURRENCY Rs) ---
+    // --- 8. BILLING ---
     window.cart = [];
-    window.loadBilling = async () => {
-        const iSnap = await getDocs(collection(db, "items"));
-        document.getElementById('page-content').innerHTML = `
-            <div class="flex flex-col md:flex-row gap-6 h-[calc(100vh-140px)]">
-                <div class="flex-1 card p-4 flex flex-col">
-                    <div class="flex gap-2 mb-4">
-                        <select id="pos-item" class="flex-1 text-lg py-3">${iSnap.docs.map(i=>`<option value="${i.data().code}" data-price="${i.data().sell}">${i.data().name} (Rs ${i.data().sell})</option>`)}</select>
-                        <input type="number" id="pos-qty" value="1" class="w-24 text-center font-bold text-lg">
-                        <button onclick="window.addToCart()" class="btn btn-primary px-6">ADD</button>
-                    </div>
-                    <div class="flex-1 overflow-auto border rounded bg-slate-50 p-2">
-                        <table><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th></th></tr></thead>
-                        <tbody id="cart-body"></tbody></table>
-                    </div>
-                </div>
-                <div class="w-full md:w-80 bg-slate-900 text-white rounded-xl p-6 flex flex-col justify-between shadow-xl">
-                    <div>
-                        <h2 class="text-sm font-bold opacity-50 uppercase tracking-widest">Total Payable</h2>
-                        <div class="flex items-baseline gap-2">
-                            <span class="text-xl">Rs</span>
-                            <div id="pos-total" class="text-5xl font-black mt-2 tracking-tight">0.00</div>
-                        </div>
-                    </div>
-                    <div class="space-y-3">
-                        <input id="pos-disc" type="number" placeholder="Discount Amount" class="bg-slate-800 border-none text-white placeholder-slate-500" onkeyup="window.renderCart()">
-                        <button onclick="window.initCheckout()" class="w-full btn btn-success py-4 text-xl justify-center font-black">COMPLETE SALE</button>
-                    </div>
-                </div>
-            </div>`;
-    };
-    
-    window.addToCart = () => {
-        const sel = document.getElementById('pos-item');
-        window.cart.push({code: sel.value, name: sel.options[sel.selectedIndex].text.split(' (')[0], price: parseFloat(sel.options[sel.selectedIndex].dataset.price), qty: parseFloat(document.getElementById('pos-qty').value)});
-        window.renderCart();
-    };
-    
-    window.renderCart = () => {
-        let sub = 0;
-        document.getElementById('cart-body').innerHTML = window.cart.map((c, i) => {
-            const tot = c.price * c.qty; sub += tot;
-            return `<tr><td>${c.name}</td><td>${c.qty}</td><td>${c.price}</td><td>${tot.toFixed(2)}</td>
-            <td><button onclick="window.cart.splice(${i},1);window.renderCart()" class="text-red-500 font-bold">&times;</button></td></tr>`;
-        }).join('');
-        const disc = parseFloat(document.getElementById('pos-disc').value) || 0;
-        document.getElementById('pos-total').innerText = (sub - disc).toFixed(2);
-    };
-    
-    window.initCheckout = () => {
-        if(window.cart.length === 0) return alert("Cart Empty");
-        const total = document.getElementById('pos-total').innerText;
-        window.confirmAction(`Confirm Sale of Rs ${total}?`, 'processCheckout', total);
-    };
+    window.loadBilling = async () => { const snap=await getDocs(collection(db,"items")); document.getElementById('page-content').innerHTML=`<div class="flex gap-4 h-full"><div class="flex-1 card p-4 flex flex-col"><div class="flex gap-2 mb-4"><select id="pos-item" class="flex-1">${snap.docs.map(i=>`<option value="${i.data().code}" data-price="${i.data().sell}">${i.data().name} (Rs ${i.data().sell})</option>`)}</select><input id="pos-qty" type="number" value="1" class="w-20 font-bold text-center"><button onclick="window.addToCart()" class="btn btn-primary">ADD</button></div><div class="flex-1 overflow-auto bg-slate-50 p-2 rounded"><table id="cart-table"><thead><tr><th>Item</th><th>Qty</th><th>Total</th><th></th></tr></thead><tbody id="cart-body"></tbody></table></div></div><div class="w-80 flex flex-col gap-4"><div class="card p-6 bg-slate-900 text-white"><div class="text-sm opacity-50">TOTAL</div><div class="text-4xl font-black">Rs <span id="pos-total">0.00</span></div><input id="pos-disc" placeholder="Discount" class="mt-4 bg-slate-800 text-white w-full" onkeyup="window.renderCart()"><button onclick="window.initCheckout()" class="btn btn-success w-full mt-4 font-black text-xl">PAY</button></div><button onclick="window.viewBillHistory()" class="btn btn-secondary w-full">View Bill History</button></div></div>`; };
+    window.addToCart = () => { const s=document.getElementById('pos-item'); window.cart.push({code:s.value, name:s.options[s.selectedIndex].text.split(' (')[0], price:parseFloat(s.options[s.selectedIndex].dataset.price), qty:parseFloat(document.getElementById('pos-qty').value)}); window.renderCart(); };
+    window.renderCart = () => { let t=0; document.getElementById('cart-body').innerHTML=window.cart.map((c,i)=>{const x=c.price*c.qty; t+=x; return `<tr><td>${c.name}</td><td>${c.qty}</td><td>${x}</td><td><button onclick="window.cart.splice(${i},1);window.renderCart()" class="text-red-500">&times;</button></td></tr>`}).join(''); document.getElementById('pos-total').innerText=(t-(parseFloat(document.getElementById('pos-disc').value)||0)).toFixed(2); };
+    window.initCheckout = () => { if(!window.cart.length) return alert("Empty"); window.confirmAction(`Confirm Rs ${document.getElementById('pos-total').innerText}?`, 'processBill'); };
+    window.processBill = async () => { const id=await generateID('BILL','docs'), t=document.getElementById('pos-total').innerText; for(let c of window.cart) { const s=await getDocs(query(collection(db,"stocks"),where("loc","==",loc),where("itemCode","==",c.code),limit(1))); if(!s.empty) await updateDoc(doc(db,"stocks",s.docs[0].id),{qty:s.docs[0].data().qty-c.qty}); await logHistory(c.code,'SALE',-c.qty,id); } await addDoc(collection(db,"docs"),{docNo:id,type:'BILL',loc,total:t,items:window.cart,date:new Date().toISOString()}); window.cart=[]; window.loadBilling(); window.printDoc(`BILL ${id}`, `<p>Total: Rs ${t}</p>`, `<thead><tr><th>Item</th><th>Qty</th><th>Price</th></tr></thead><tbody>${window.cart.map(x=>`<tr><td>${x.name}</td><td>${x.qty}</td><td>${x.price}</td></tr>`).join('')}</tbody>`); };
+    window.viewBillHistory = async () => { const snap = await getDocs(query(collection(db,"docs"),where("type","==", "BILL"),where("loc","==",loc),orderBy("date","desc"),limit(20))); openModal("Bill History", `<table class="w-full"><thead><tr><th>Bill#</th><th>Date</th><th>Total</th><th>Action</th></tr></thead><tbody>${snap.docs.map(d=>`<tr><td>${d.data().docNo}</td><td>${new Date(d.data().date).toLocaleDateString()}</td><td>${d.data().total}</td><td><button onclick="window.printBillOld('${d.id}')" class="btn btn-primary text-xs">Print</button></td></tr>`).join('')}</tbody></table>`); };
+    window.printBillOld = async (id) => { const d=(await getDoc(doc(db,"docs",id))).data(); window.printDoc(`BILL ${d.docNo}`, `<p>Date: ${new Date(d.date).toLocaleString()}</p><p>Total: Rs ${d.total}</p>`, `<thead><tr><th>Item</th><th>Qty</th><th>Price</th></tr></thead><tbody>${d.items.map(x=>`<tr><td>${x.name}</td><td>${x.qty}</td><td>${x.price}</td></tr>`).join('')}</tbody>`); };
 
-    window.processCheckout = async (total) => {
-        const docNo = await generateID('BILL', 'docs');
-        for(let c of window.cart) {
-            const sSnap = await getDocs(query(collection(db, "stocks"), where("loc", "==", loc), where("itemCode", "==", c.code), limit(1)));
-            if(!sSnap.empty) await updateDoc(doc(db, "stocks", sSnap.docs[0].id), {qty: sSnap.docs[0].data().qty - c.qty});
-            await logHistory(c.code, 'SALE', -c.qty, docNo);
-        }
-        await addDoc(collection(db, "docs"), {docNo, type: 'BILL', loc, total, items: window.cart, date: new Date().toISOString()});
-        const w = window.open('','','width=300,height=600');
-        w.document.write(`<html><body style="font-family:monospace"><h3>BILL ${docNo}</h3><hr>${window.cart.map(x=>`<div>${x.name} x${x.qty} Rs ${x.price*x.qty}</div>`).join('')}<hr><h2>TOTAL: Rs ${total}</h2></body></html>`);
-        w.print(); w.close();
-        window.cart = []; window.loadBilling();
-    };
+    // --- 9. PO & 10. GRN ---
+    window.loadPO = async () => { const snap = await getDocs(query(collection(db,"docs"),where("type","==","PO"))); document.getElementById('page-content').innerHTML=`<div class="flex justify-between mb-4"><h3 class="font-bold text-xl">POs</h3><div><button onclick="window.viewPOHistory()" class="btn btn-secondary mr-2">History</button><button onclick="window.createPO()" class="btn btn-primary">+ New</button></div></div><div class="card"><table><thead><tr><th>PO#</th><th>Supplier</th><th>Status</th><th>Action</th></tr></thead><tbody>${snap.docs.map(d=>`<tr><td>${d.data().docNo}</td><td>${d.data().supplier}</td><td>${d.data().status}</td><td>${d.data().status==='PENDING'?`<button onclick="window.loadPage('grn');setTimeout(()=>window.convGRN('${d.data().docNo}'),500)" class="text-green-600 font-bold mr-2">GRN</button><button onclick="window.confirmAction('Delete?','delDoc','${d.id}','po')" class="text-red-500 font-bold">Del</button>`:'-'}</td></tr>`).join('')}</tbody></table></div>`; };
+    window.createPO = async () => { const s=await getDocs(collection(db,"suppliers")); const i=await getDocs(collection(db,"items")); window.tempArr=[]; openModal("New PO", `<label>Supplier</label><select id="p-s" class="mb-2">${s.docs.map(x=>`<option>${x.data().name}</option>`)}</select><div class="flex gap-2"><select id="p-i" class="flex-1">${i.docs.map(x=>`<option value="${x.data().code}">${x.data().name}</option>`)}</select><input id="p-q" class="w-20"><button onclick="window.addP()" class="btn btn-primary">Add</button></div><div id="p-l" class="mt-2"></div>`, `<button onclick="window.confirmAction('Save?','savePO')" class="btn btn-primary">Save PO</button>`); };
+    window.addP = () => { window.tempArr.push({code:document.getElementById('p-i').value,qty:document.getElementById('p-q').value}); document.getElementById('p-l').innerHTML=window.tempArr.map(x=>`<div>${x.code} : ${x.qty}</div>`).join(''); };
+    window.savePO = async () => { const id=await generateID('PO','docs'); await addDoc(collection(db,"docs"),{docNo:id,type:'PO',supplier:document.getElementById('p-s').value,items:window.tempArr,status:'PENDING',date:new Date().toISOString()}); window.loadPO(); };
+    window.viewPOHistory = async () => { const snap=await getDocs(query(collection(db,"docs"),where("type","==","PO"),orderBy("date","desc"))); openModal("PO History", `<table>${snap.docs.map(d=>`<tr><td>${d.data().docNo}</td><td><button onclick="window.printOldDoc('${d.id}','PO')" class="btn btn-primary text-xs">Print</button></td></tr>`).join('')}</table>`); };
+    window.delDoc = async (id, page) => { await deleteDoc(doc(db,"docs",id)); if(page==='po') window.loadPO(); if(page==='tr') window.loadTransferOut(); };
 
-    // --- 11. PO & 12. GRN (Standard) ---
-    window.loadPO = async () => {
-        const docs = await getDocs(query(collection(db, "docs"), where("type", "==", "PO")));
-        document.getElementById('page-content').innerHTML = `
-            <div class="flex justify-between mb-4"><h3 class="font-bold text-xl">Purchase Orders</h3><button onclick="window.createPO()" class="btn btn-primary">+ New PO</button></div>
-            <div class="card"><table><thead><tr><th>PO#</th><th>Supplier</th><th>Status</th><th>Action</th></tr></thead><tbody>
-            ${docs.docs.map(d => { const dt = d.data(); return `<tr><td>${dt.docNo}</td><td>${dt.supplier}</td>
-            <td><span class="px-2 py-1 rounded text-xs font-bold ${dt.status==='PENDING'?'bg-orange-100 text-orange-600':'bg-green-100 text-green-600'}">${dt.status}</span></td>
-            <td>${dt.status==='PENDING' ? `<button onclick="window.loadPage('grn'); setTimeout(()=>window.convertToGRN('${dt.docNo}'), 500)" class="ml-2 text-green-600 font-bold">GRN &rarr;</button>` : ''}</td></tr>`;}).join('')}
-            </tbody></table></div>`;
-    };
-    window.createPO = async () => {
-        const sup = await getDocs(collection(db, "suppliers"));
-        const items = await getDocs(collection(db, "items"));
-        const id = await generateID('PO', 'docs');
-        window.tempPOItems = [];
-        const body = `
-            <div class="mb-4"><b>PO #: ${id}</b></div>
-            <select id="po-sup" class="mb-2">${sup.docs.map(s=>`<option>${s.data().name}</option>`)}</select>
-            <div class="flex gap-2 bg-slate-50 p-3 rounded border">
-                <select id="po-item" class="flex-1">${items.docs.map(i=>`<option value="${i.data().code}">${i.data().name}</option>`)}</select>
-                <input id="po-qty" type="number" placeholder="Qty" class="w-20">
-                <button onclick="window.addTempPOItem()" class="btn btn-primary text-xs">Add</button>
-            </div>
-            <div id="po-list" class="mt-2 text-sm max-h-40 overflow-y-auto"></div>`;
-        openModal("Create PO", body, `<button onclick="window.confirmAction('Create PO?', 'savePO', '${id}')" class="btn btn-primary">Confirm PO</button>`);
-    };
-    window.addTempPOItem = () => { window.tempPOItems.push({code: document.getElementById('po-item').value, qty: document.getElementById('po-qty').value}); document.getElementById('po-list').innerHTML = window.tempPOItems.map(x=>`<div>${x.code} - Qty: ${x.qty}</div>`).join(''); };
-    window.savePO = async (docNo) => { await addDoc(collection(db, "docs"), {docNo, type: 'PO', supplier: document.getElementById('po-sup').value, items: window.tempPOItems, status: 'PENDING', date: new Date().toISOString()}); window.loadPO(); };
-    window.loadGRN = async () => { document.getElementById('page-content').innerHTML = `<div class="card p-6 max-w-2xl mx-auto"><h3 class="font-bold mb-4">Create GRN</h3><div class="flex gap-2"><input id="grn-po" placeholder="Enter PO Number"><button onclick="window.convertToGRN(document.getElementById('grn-po').value)" class="btn btn-primary">Load PO</button></div><div id="grn-area" class="mt-6"></div></div>`; };
-    window.convertToGRN = async (poNo) => {
-        const snap = await getDocs(query(collection(db, "docs"), where("docNo", "==", poNo), where("type", "==", "PO")));
-        if(snap.empty) return alert("Invalid PO");
-        const po = snap.docs[0].data(); const poDocId = snap.docs[0].id;
-        const grnNo = await generateID('GRN', 'docs'); window.currentPOItems = po.items;
-        document.getElementById('grn-area').innerHTML = `<div class="border p-4 rounded bg-slate-50"><div class="flex justify-between font-bold mb-4"><span>GRN: ${grnNo}</span><span>Ref: ${poNo}</span></div><table><thead><tr><th>Item</th><th>Ord Qty</th><th>Recv Qty</th><th>Exp Date</th></tr></thead><tbody>${po.items.map((it, i) => `<tr><td>${it.code}</td><td>${it.qty}</td><td><input id="g-q-${i}" value="${it.qty}" type="number" class="w-20 p-1"></td><td><input id="g-e-${i}" type="date" class="p-1"></td></tr>`).join('')}</tbody></table><button onclick="window.confirmAction('Confirm GRN?', 'saveGRN', '${grnNo}', '${poNo}', '${poDocId}')" class="w-full btn btn-success mt-4 justify-center">COMPLETE GRN</button></div>`;
-    };
-    window.saveGRN = async (grn, poRef, poDocId) => {
-        for(let i=0; i<window.currentPOItems.length; i++) {
-            const item = window.currentPOItems[i]; const qty = parseFloat(document.getElementById(`g-q-${i}`).value); const exp = document.getElementById(`g-e-${i}`).value;
-            await addDoc(collection(db, "stocks"), {itemCode: item.code, loc, qty, exp}); await logHistory(item.code, 'GRN', qty, grn);
-        }
-        await addDoc(collection(db, "docs"), {docNo: grn, type: 'GRN', ref: poRef, date: new Date().toISOString()}); await updateDoc(doc(db, "docs", poDocId), {status: 'RECEIVED'}); alert("Stock Added"); window.loadDashboard();
-    };
+    window.loadGRN = async () => { document.getElementById('page-content').innerHTML=`<div class="card p-6 max-w-md mx-auto"><h3 class="font-bold mb-4">GRN</h3><div class="flex gap-2 mb-4"><input id="g-r" placeholder="Enter PO Number"><button onclick="window.convGRN(document.getElementById('g-r').value)" class="btn btn-primary">Load</button></div><button onclick="window.viewGRNHistory()" class="btn btn-secondary w-full">View GRN History</button><div id="g-a" class="mt-4"></div></div>`; };
+    window.convGRN = async (no) => { const s=await getDocs(query(collection(db,"docs"),where("docNo","==",no),where("type","==","PO"))); if(s.empty) return alert("Invalid"); const d=s.docs[0].data(); window.tempId=s.docs[0].id; window.tempItems=d.items; document.getElementById('g-a').innerHTML=`<table>${d.items.map((x,i)=>`<tr><td>${x.code}</td><td><input id="gq-${i}" value="${x.qty}" class="w-20"></td><td><input type="date" id="ge-${i}"></td></tr>`).join('')}</table><button onclick="window.confirmAction('Save GRN?','saveGRN','${no}')" class="btn btn-success w-full mt-4">Complete</button>`; };
+    window.saveGRN = async (ref) => { const id=await generateID('GRN','docs'); for(let i=0;i<window.tempItems.length;i++){ const q=parseFloat(document.getElementById(`gq-${i}`).value); await addDoc(collection(db,"stocks"),{itemCode:window.tempItems[i].code,loc,qty:q,exp:document.getElementById(`ge-${i}`).value}); await logHistory(window.tempItems[i].code,'GRN',q,id); } await addDoc(collection(db,"docs"),{docNo:id,type:'GRN',ref,date:new Date().toISOString(),items:window.tempItems}); await updateDoc(doc(db,"docs",window.tempId),{status:'RECEIVED'}); alert("Done"); window.loadDashboard(); };
+    window.viewGRNHistory = async () => { const snap=await getDocs(query(collection(db,"docs"),where("type","==","GRN"),orderBy("date","desc"))); openModal("GRN History", `<table>${snap.docs.map(d=>`<tr><td>${d.data().docNo}</td><td><button onclick="window.printOldDoc('${d.id}','GRN')" class="btn btn-primary text-xs">Print</button></td></tr>`).join('')}</table>`); };
 
-    // --- 13. PAGE LOGIC: TRANSFER OUT (WITH VALIDATION) ---
-    window.loadTransferOut = async () => {
-        const lSnap = await getDocs(collection(db, "locations"));
-        const iSnap = await getDocs(collection(db, "items"));
-        const trId = await generateID('TR', 'docs');
-        window.tempTr = [];
-        
-        document.getElementById('page-content').innerHTML = `
-            <div class="card p-6 max-w-3xl mx-auto">
-                <div class="flex justify-between mb-6"><h3 class="font-bold text-xl">Transfer Out</h3><span class="font-mono bg-slate-100 p-2 rounded">${trId}</span></div>
-                <label class="text-xs font-bold uppercase">Destination Location</label>
-                <select id="tr-dest" class="mb-4">${lSnap.docs.filter(l=>l.data().name!==loc).map(l=>`<option>${l.data().name}</option>`)}</select>
-                
-                <div class="bg-slate-50 p-4 rounded border mb-4">
-                    <div class="flex gap-2 mb-2">
-                        <select id="tr-item" class="flex-1" onchange="window.loadTrBatches(this.value)">${iSnap.docs.map(i=>`<option value="${i.data().code}">${i.data().name}</option>`)}</select>
-                        <select id="tr-batch" class="flex-1"><option>Select Batch...</option></select>
-                        <input id="tr-qty" type="number" placeholder="Qty" class="w-24">
-                        <button onclick="window.addTrItem()" class="btn btn-primary">Add</button>
-                    </div>
-                    <div id="tr-list" class="text-sm"></div>
-                </div>
-                <button onclick="window.confirmAction('Send Transfer?', 'saveTr', '${trId}')" class="w-full btn btn-primary justify-center">CONFIRM TRANSFER</button>
-            </div>`;
-        if(!iSnap.empty) window.loadTrBatches(iSnap.docs[0].data().code);
-    };
+    // --- 11. TRANSFER OUT ---
+    window.loadTransferOut = async () => { const l=await getDocs(collection(db,"locations")); const i=await getDocs(collection(db,"items")); const id=await generateID('TR','docs'); window.tempArr=[]; document.getElementById('page-content').innerHTML=`<div class="card p-6 max-w-2xl mx-auto"><h3 class="font-bold mb-4">Transfer Out (${id})</h3><label>To Location</label><select id="t-d" class="mb-4">${l.docs.filter(x=>x.data().name!==loc).map(x=>`<option>${x.data().name}</option>`)}</select><div class="bg-slate-50 p-4 rounded mb-4 flex gap-2"><select id="t-i" class="flex-1" onchange="window.loadBatches(this.value)">${i.docs.map(x=>`<option value="${x.data().code}">${x.data().name}</option>`)}</select><select id="t-b" class="flex-1"></select><input id="t-q" class="w-20" placeholder="Qty"><button onclick="window.addTr()" class="btn btn-primary">Add</button></div><div id="t-l"></div><button onclick="window.confirmAction('Send?','saveTr','${id}')" class="btn btn-primary w-full mt-4">Send</button><button onclick="window.viewTrHistoryOut()" class="btn btn-secondary w-full mt-2">History (Pending)</button></div>`; window.loadBatches(i.docs[0].data().code); };
+    window.loadBatches = async (c) => { const s=await getDocs(query(collection(db,"stocks"),where("itemCode","==",c),where("loc","==",loc))); document.getElementById('t-b').innerHTML=s.docs.map(x=>`<option value="${x.id}" data-max="${x.data().qty}">Exp: ${x.data().exp} (Avl: ${x.data().qty})</option>`).join(''); };
+    window.addTr = () => { const b=document.getElementById('t-b'); const max=parseFloat(b.options[b.selectedIndex].dataset.max), q=parseFloat(document.getElementById('t-q').value); if(q>max) return alert("Qty exceeds availability"); window.tempArr.push({batchId:b.value,code:document.getElementById('t-i').value,qty:q}); document.getElementById('t-l').innerHTML=window.tempArr.map(x=>`<div>${x.code}: ${x.qty}</div>`).join(''); };
+    window.saveTr = async (id) => { const to=document.getElementById('t-d').value; for(let x of window.tempArr){ const r=doc(db,"stocks",x.batchId); await updateDoc(r,{qty:(await getDoc(r)).data().qty-x.qty}); await logHistory(x.code,'TR-OUT',-x.qty,id,loc,to); } await addDoc(collection(db,"docs"),{docNo:id,type:'TRANSFER',fromLoc:loc,toLoc:to,items:window.tempArr,status:'TRANSIT',date:new Date().toISOString()}); window.loadDashboard(); };
+    window.viewTrHistoryOut = async () => { const snap=await getDocs(query(collection(db,"docs"),where("type","==","TRANSFER"),where("fromLoc","==",loc),where("status","==","TRANSIT"))); openModal("Pending Sent", `<table>${snap.docs.map(d=>`<tr><td>${d.data().docNo}</td><td><button onclick="window.confirmAction('Cancel?','cancelTr','${d.id}')" class="text-red-500">Cancel</button></td></tr>`).join('')}</table>`); };
+    window.cancelTr = async (id) => { const d=(await getDoc(doc(db,"docs",id))).data(); for(let i of d.items){ const r=doc(db,"stocks",i.batchId); await updateDoc(r,{qty:(await getDoc(r)).data().qty+i.qty}); } await deleteDoc(doc(db,"docs",id)); alert("Cancelled"); window.loadTransferOut(); };
 
-    window.loadTrBatches = async (code) => {
-        const sSnap = await getDocs(query(collection(db, "stocks"), where("itemCode", "==", code), where("loc", "==", loc)));
-        document.getElementById('tr-batch').innerHTML = sSnap.docs.map(x => `<option value="${x.id}" data-max="${x.data().qty}">Exp: ${x.data().exp||'N/A'} (Avl: ${x.data().qty})</option>`).join('');
-    };
-
-    window.addTrItem = () => {
-        const b = document.getElementById('tr-batch');
-        const qty = parseFloat(document.getElementById('tr-qty').value);
-        if(!b.value) return alert("No Batch Selected");
-        
-        // Validation: Check if Qty > Available
-        const max = parseFloat(b.options[b.selectedIndex].dataset.max);
-        if(qty > max) return alert(`Error: Cannot transfer ${qty}. Batch only has ${max}.`);
-
-        window.tempTr.push({batchId: b.value, qty: qty, code: document.getElementById('tr-item').value});
-        document.getElementById('tr-list').innerHTML = window.tempTr.map(x=>`<div>${x.code} - ${x.qty}</div>`).join('');
-    };
-
-    window.saveTr = async (docNo) => {
-        const toLoc = document.getElementById('tr-dest').value;
-        for(let line of window.tempTr) {
-            const sRef = doc(db, "stocks", line.batchId);
-            const sDoc = await getDoc(sRef);
-            await updateDoc(sRef, {qty: sDoc.data().qty - line.qty});
-            await logHistory(line.code, 'TR-OUT', -line.qty, docNo, loc, toLoc);
-        }
-        await addDoc(collection(db, "docs"), {docNo, type: 'TRANSFER', fromLoc: loc, toLoc, items: window.tempTr, status: 'TRANSIT', date: new Date().toISOString()});
-        alert("Transfer Sent"); window.loadDashboard();
-    };
-
-    // --- 14. PAGE LOGIC: TRANSFER IN (HISTORY & PRINT) ---
+    // --- 12. TRANSFER IN ---
     window.loadTransferIn = async () => {
-        // Pending
-        const pending = await getDocs(query(collection(db, "docs"), where("toLoc", "==", loc), where("type", "==", "TRANSFER"), where("status", "==", "TRANSIT")));
-        // Completed
-        const completed = await getDocs(query(collection(db, "docs"), where("toLoc", "==", loc), where("type", "==", "TRANSFER"), where("status", "==", "RECEIVED"), orderBy("date", "desc"), limit(20)));
-
-        document.getElementById('page-content').innerHTML = `
-            <div class="mb-8">
-                <h3 class="font-bold text-xl mb-4 text-orange-600">Incoming Transfers (Pending)</h3>
-                <div class="card"><table><thead><tr><th>Doc #</th><th>From</th><th>Items</th><th>Action</th></tr></thead><tbody>
-                ${pending.docs.length ? pending.docs.map(d => `<tr><td>${d.data().docNo}</td><td>${d.data().fromLoc}</td><td>${d.data().items.length} Lines</td>
-                <td><button onclick="window.confirmAction('Accept Transfer?', 'recvTr', '${d.id}')" class="btn btn-success py-1 px-3 text-xs">Receive Stock</button></td></tr>`).join('') : '<tr><td colspan="4" class="text-center p-4">No Pending Transfers</td></tr>'}
-                </tbody></table></div>
-            </div>
-            
-            <div>
-                <h3 class="font-bold text-xl mb-4 text-slate-600">Received History</h3>
-                <div class="card"><table><thead><tr><th>Doc #</th><th>From</th><th>Date Received</th><th>Action</th></tr></thead><tbody>
-                ${completed.docs.map(d => `<tr><td>${d.data().docNo}</td><td>${d.data().fromLoc}</td><td>${new Date(d.data().date).toLocaleDateString()}</td>
-                <td><button onclick="window.viewTrHistory('${d.id}')" class="btn bg-slate-100 text-xs">View / Print</button></td></tr>`).join('')}
-                </tbody></table></div>
-            </div>`;
-    };
-
-    window.recvTr = async (id) => {
-        const d = await getDoc(doc(db, "docs", id)); const data = d.data();
-        for(let i of data.items) {
-            await addDoc(collection(db, "stocks"), {itemCode: i.code, loc, qty: i.qty, exp: 'TRANSFER'});
-            await logHistory(i.code, 'TR-IN', i.qty, data.docNo, data.fromLoc, loc);
-        }
-        await updateDoc(doc(db, "docs", id), {status: 'RECEIVED', receivedDate: new Date().toISOString()});
-        window.loadTransferIn();
-    };
-
-    window.viewTrHistory = async (id) => {
-        const d = await getDoc(doc(db, "docs", id));
-        const data = d.data();
-        const rows = data.items.map(i => `<tr><td>${i.code}</td><td>${i.qty}</td></tr>`).join('');
-        openModal(`Transfer: ${data.docNo}`, 
-            `<div>
-                <p><b>From:</b> ${data.fromLoc}</p>
-                <p><b>Date:</b> ${new Date(data.date).toLocaleDateString()}</p>
-                <table class="mt-4"><thead><tr><th>Item</th><th>Qty</th></tr></thead><tbody>${rows}</tbody></table>
-            </div>`,
-            `<button onclick="window.printTr('${data.docNo}', '${data.fromLoc}', '${data.date}', '${rows.replace(/"/g, '&quot;')}')" class="btn btn-primary">Print Receipt</button>`);
-    };
-
-    window.printTr = (docNo, from, date, rowsHtml) => {
-        const w = window.open('','','width=600,height=600');
-        w.document.write(`<html><body style="font-family:sans-serif; padding: 20px;">
-            <h2 style="text-align:center">TRANSFER RECEIPT</h2>
-            <hr>
-            <p><b>Doc No:</b> ${docNo}</p>
-            <p><b>From Location:</b> ${from}</p>
-            <p><b>Date:</b> ${new Date(date).toLocaleString()}</p>
-            <table style="width:100%; border-collapse: collapse; margin-top:20px" border="1">
-                <thead><tr><th style="padding:8px">Item Code</th><th style="padding:8px">Quantity</th></tr></thead>
-                <tbody>${rowsHtml}</tbody>
-            </table>
-            <br><br><p style="text-align:center; font-size:12px;">Generated by IMS ELITE</p>
-        </body></html>`);
-        w.print(); w.close();
-    }
-
-    // --- 15. UTILS: VERIFICATION (EXPIRY DATE ADDED) ---
-    window.loadVerification = async () => {
-        const iSnap = await getDocs(collection(db, "items"));
-        document.getElementById('page-content').innerHTML = `
-            <div class="card p-6 max-w-lg mx-auto">
-                <h3 class="font-bold mb-4">Stock Adjustment</h3>
-                <label class="text-xs font-bold">Select Item</label>
-                <select id="adj-item" class="mb-4 w-full border p-2 rounded">${iSnap.docs.map(i=>`<option value="${i.data().code}">${i.data().name}</option>`)}</select>
-                
-                <label class="text-xs font-bold">New Quantity (Use - for deduction)</label>
-                <input id="adj-qty" type="number" placeholder="Qty (+/-)" class="mb-4 w-full border p-2 rounded">
-                
-                <label class="text-xs font-bold">Expiry Date (For Batch)</label>
-                <input id="adj-exp" type="date" class="mb-6 w-full border p-2 rounded">
-                
-                <button onclick="window.confirmAction('Post Adjustment?', 'saveAdj')" class="w-full btn btn-primary">POST ADJUSTMENT</button>
-            </div>`;
-    };
-    
-    window.saveAdj = async () => {
-        const code = document.getElementById('adj-item').value;
-        const qty = parseFloat(document.getElementById('adj-qty').value);
-        const exp = document.getElementById('adj-exp').value;
+        // Simple query without compound index to avoid errors, sorting done client side
+        const q1 = query(collection(db,"docs"),where("toLoc","==",loc),where("status","==","TRANSIT"));
+        const p = await getDocs(q1);
         
-        if(!qty || !exp) return alert("Please fill all fields");
+        const q2 = query(collection(db,"docs"),where("toLoc","==",loc),where("status","==","RECEIVED"));
+        const cSnap = await getDocs(q2);
+        const cDocs = cSnap.docs.sort((a,b) => b.data().date.localeCompare(a.data().date)).slice(0, 20); // Client side sort
 
-        await addDoc(collection(db, "stocks"), {itemCode: code, loc, qty, exp: exp}); // Use selected Date
-        await logHistory(code, 'AUDIT', qty, 'ADJ'); 
-        alert("Stock Adjusted!"); window.loadVerification();
+        document.getElementById('page-content').innerHTML=`<h3 class="font-bold text-orange-600 mb-2">Pending</h3><div class="card mb-6"><table>${p.docs.map(d=>`<tr><td>${d.data().docNo}</td><td>From: ${d.data().fromLoc}</td><td><button onclick="window.confirmAction('Recv?','recvTr','${d.id}')" class="btn btn-success text-xs">Receive</button></td></tr>`).join('')}</table></div><h3 class="font-bold text-slate-600 mb-2">History</h3><div class="card"><table>${cDocs.map(d=>`<tr><td>${d.data().docNo}</td><td>${d.data().fromLoc}</td><td><button onclick="window.printOldDoc('${d.id}','TR')" class="btn btn-primary text-xs">Print</button></td></tr>`).join('')}</table></div>`;
     };
+    window.recvTr = async (id) => { const d=(await getDoc(doc(db,"docs",id))).data(); for(let x of d.items){ await addDoc(collection(db,"stocks"),{itemCode:x.code,loc,qty:x.qty,exp:'TRANSFER'}); await logHistory(x.code,'TR-IN',x.qty,d.docNo,d.fromLoc,loc); } await updateDoc(doc(db,"docs",id),{status:'RECEIVED'}); window.loadTransferIn(); };
 
-    window.loadBincard = async () => {
-        const iSnap = await getDocs(collection(db, "items"));
-        document.getElementById('page-content').innerHTML = `<select id="bin-sel" class="mb-4 card p-3" onchange="window.renderBin(this.value)">${iSnap.docs.map(i=>`<option value="${i.data().code}">${i.data().name}</option>`)}</select><div id="bin-view" class="card"></div>`;
-        if(!iSnap.empty) window.renderBin(iSnap.docs[0].data().code);
+    // --- 13. VERIFICATION (SMART ADJUSTMENT) ---
+    window.loadVerification = async () => { const i=await getDocs(collection(db,"items")); document.getElementById('page-content').innerHTML=`<div class="card p-6 max-w-md mx-auto"><h3 class="font-bold mb-4">Verification</h3><label class="text-xs font-bold">1. Select Item</label><select id="v-i" class="mb-4 w-full border p-2" onchange="window.loadExpDates(this.value)">${i.docs.map(x=>`<option value="${x.data().code}">${x.data().name}</option>`)}</select><label class="text-xs font-bold">2. Select Batch</label><select id="v-e" class="mb-4 w-full border p-2"></select><input id="v-q" class="mb-4 w-full border p-2" placeholder="Qty (+/-)"><button onclick="window.confirmAction('Adjust?','saveVer')" class="btn btn-primary w-full">Post</button></div>`; window.loadExpDates(i.docs[0].data().code); };
+    window.loadExpDates = async (c) => { 
+        // Find existing batches (even if 0 stock)
+        const s = await getDocs(query(collection(db,"stocks"), where("itemCode","==",c), where("loc","==",loc))); 
+        const dates = [...new Set(s.docs.map(x=>x.data().exp))].sort(); 
+        document.getElementById('v-e').innerHTML = dates.map(d=>`<option>${d}</option>`).join('') + `<option value="new">-- New Date --</option>`; 
     };
-
-    window.renderBin = async (code) => {
-        const hSnap = await getDocs(query(collection(db, "history"), where("itemCode", "==", code), where("loc", "==", loc)));
-        const hist = hSnap.docs.map(d=>d.data()).sort((a,b) => new Date(b.date) - new Date(a.date)); 
-        document.getElementById('bin-view').innerHTML = `<table><thead><tr><th>Date</th><th>Doc</th><th>Type</th><th>User</th><th class="text-right">Qty</th></tr></thead><tbody>
-        ${hist.map(h => `<tr><td>${new Date(h.date).toLocaleDateString()}</td><td>${h.docNo}</td><td>${h.type}</td><td>${h.user}</td><td class="text-right font-bold ${h.qty<0?'text-red-500':'text-green-600'}">${h.qty}</td></tr>`).join('')}
-        </tbody></table>`;
-    };
-
-    window.loadReports = async () => {
-        document.getElementById('page-content').innerHTML = `
-            <div class="card p-8 text-center"><h3 class="text-2xl font-bold mb-4">System Reports</h3>
-                <div class="flex gap-4 justify-center">
-                    <button onclick="window.genRep('stock')" class="btn btn-primary">Current Stock Report</button>
-                    <button onclick="window.genRep('sales')" class="btn btn-primary">Sales Report</button>
-                </div>
-            </div>`;
-    };
-    
-    window.genRep = async (type) => {
-        let html = '';
-        if(type === 'stock') {
-            const sSnap = await getDocs(query(collection(db, "stocks"), where("loc", "==", loc)));
-            html = `<h2>Stock Report: ${loc}</h2><table><thead><tr><th>Code</th><th>Qty</th><th>Exp</th></tr></thead><tbody>
-            ${sSnap.docs.map(d=>{const x=d.data(); return `<tr><td>${x.itemCode}</td><td>${x.qty}</td><td>${x.exp||'-'}</td></tr>`}).join('')}</tbody></table>`;
+    window.saveVer = async () => { 
+        let e = document.getElementById('v-e').value; const c = document.getElementById('v-i').value, q = parseFloat(document.getElementById('v-q').value);
+        if(e === 'new') e = prompt("Enter Expiry (YYYY-MM-DD):"); if(!e) return;
+        
+        // Check if batch exists
+        const s = await getDocs(query(collection(db,"stocks"), where("itemCode","==",c), where("loc","==",loc), where("exp","==",e)));
+        if(!s.empty) {
+            // Update existing batch
+            const docRef = s.docs[0].ref;
+            const newQty = s.docs[0].data().qty + q;
+            await updateDoc(docRef, {qty: newQty});
+        } else {
+            // Create new batch
+            await addDoc(collection(db,"stocks"), {itemCode:c, loc, qty:q, exp:e}); 
         }
-        if(type === 'sales') {
-            const hSnap = await getDocs(query(collection(db, "history"), where("type", "==", "SALE"), where("loc", "==", loc)));
-            html = `<h2>Sales Report: ${loc}</h2><table><thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Doc</th></tr></thead><tbody>
-            ${hSnap.docs.map(d=>{const x=d.data(); return `<tr><td>${new Date(x.date).toLocaleDateString()}</td><td>${x.itemCode}</td><td>${Math.abs(x.qty)}</td><td>${x.docNo}</td></tr>`}).join('')}</tbody></table>`;
-        }
-        const w = window.open(); w.document.write(`<style>body{font-family:sans-serif;}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;padding:8px;text-align:left;}</style>${html}`); w.print(); w.close();
+        await logHistory(c, 'AUDIT', q, 'ADJ'); alert("Done"); window.loadVerification(); 
     };
 
-    // --- NAVIGATION DISPATCHER ---
+    // --- OTHER ---
+    window.printOldDoc = async (id, type) => { const d = (await getDoc(doc(db,"docs",id))).data(); let html = `<thead><tr><th>Item</th><th>Qty</th></tr></thead><tbody>`; if(d.items) html += d.items.map(x=>`<tr><td>${x.code}</td><td>${x.qty}</td></tr>`).join(''); html += `</tbody>`; window.printDoc(`${type} : ${d.docNo}`, `<p>Date: ${new Date(d.date).toLocaleString()}</p><p>Status: ${d.status||'Completed'}</p>`, html); };
+    window.loadBincard = async () => { const i=await getDocs(collection(db,"items")); document.getElementById('page-content').innerHTML=`<select class="card p-2 mb-4" onchange="window.renderBin(this.value)">${i.docs.map(x=>`<option value="${x.data().code}">${x.data().name}</option>`)}</select><div id="bv" class="card"></div>`; window.renderBin(i.docs[0].data().code); };
+    window.renderBin = async (c) => { const h=await getDocs(query(collection(db,"history"),where("itemCode","==",c),where("loc","==",loc),orderBy("date","desc"))); document.getElementById('bv').innerHTML=`<table>${h.docs.map(d=>`<tr><td>${new Date(d.data().date).toLocaleDateString()}</td><td>${d.data().type}</td><td>${d.data().qty}</td></tr>`).join('')}</table>`; };
+    window.loadReports = () => { document.getElementById('page-content').innerHTML=`<div class="card p-6 text-center"><button onclick="window.genRep('S')" class="btn btn-primary m-2">Stock</button><button onclick="window.genRep('H')" class="btn btn-secondary m-2">Sales</button></div>`; };
+    window.genRep = async (t) => { if(t==='S'){ const s=await getDocs(query(collection(db,"stocks"),where("loc","==",loc))); window.printDoc("Stock Report", `Location: ${loc}`, `<thead><tr><th>Item</th><th>Qty</th><th>Exp</th></tr></thead><tbody>${s.docs.map(x=>`<tr><td>${x.data().itemCode}</td><td>${x.data().qty}</td><td>${x.data().exp}</td></tr>`).join('')}</tbody>`); } else { const h=await getDocs(query(collection(db,"history"),where("type","==","SALE"),where("loc","==",loc))); window.printDoc("Sales Report", `Location: ${loc}`, `<thead><tr><th>Date</th><th>Item</th><th>Qty</th></tr></thead><tbody>${h.docs.map(x=>`<tr><td>${new Date(x.data().date).toLocaleDateString()}</td><td>${x.data().itemCode}</td><td>${x.data().qty}</td></tr>`).join('')}</tbody>`); } };
+
     window.loadPage = (id) => {
-        document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
-        document.getElementById('nav-'+id)?.classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active')); document.getElementById('nav-'+id)?.classList.add('active');
         document.getElementById('page-title').innerText = PAGES.find(p=>p.id===id).n;
         const routes = {
             dashboard: window.loadDashboard, stock_check: window.loadStockCheck, items: window.loadItems,
@@ -763,7 +372,6 @@
         if(routes[id]) routes[id]();
     };
 
-    // Start
     initNav();
 </script>
 </body>
