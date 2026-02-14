@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IMS ELITE | Secure Login</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; background: #0f172a; height: 100vh; display: flex; align-items: center; justify-content: center; }
@@ -24,11 +23,11 @@
         <div class="text-center mb-10">
             <h1 class="text-4xl font-black italic tracking-tighter text-slate-800">IMS<span class="text-blue-600">ELITE</span></h1>
             <div id="db-status" class="mt-2">
-                <span class="status-badge bg-orange-100 text-orange-600 animate-pulse">Initializing Database...</span>
+                <span class="status-badge bg-orange-100 text-orange-600 animate-pulse">Connecting to Cloud...</span>
             </div>
         </div>
 
-        <form onsubmit="event.preventDefault(); login();">
+        <form id="loginForm">
             <div class="space-y-1 mb-4">
                 <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Identity</label>
                 <input type="text" id="u" placeholder="Username" class="inp" required>
@@ -46,7 +45,7 @@
                 </select>
             </div>
             
-            <button type="submit" id="loginBtn" class="btn-login" disabled>Please Wait...</button>
+            <button type="submit" id="loginBtn" class="btn-login" disabled>Syncing...</button>
         </form>
 
         <div id="err" class="mt-4 text-center text-xs font-bold text-red-500 hidden bg-red-50 p-3 rounded-lg border border-red-100"></div>
@@ -55,32 +54,33 @@
             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2">Master Credentials</p>
             <code class="text-xs bg-slate-100 px-3 py-1 rounded-md text-slate-600 font-bold">admin / admin123</code>
         </div>
-        
-        <p onclick="forceWipe()" class="text-[9px] text-slate-300 text-center mt-6 cursor-pointer hover:text-red-400 transition underline">Reset System Database</p>
     </div>
 
-    <script>
-        // Use exactly the same database name as main.html
-        const db = new Dexie("IMS_ELITE_PRO");
-        db.version(1).stores({
-            items: '++id, code, name',
-            suppliers: '++id, name',
-            locations: '++id, name',
-            users: '++id, username',
-            stocks: '++id, itemCode, loc',
-            docs: '++id, docNo, type, status, fromLoc, toLoc',
-            history: '++id, date, itemCode, user'
-        });
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, addDoc, query, where, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDNpEbBt638KQGgkD4EvtqrRvInupP55zM",
+            authDomain: "bills-de7ee.firebaseapp.com",
+            projectId: "bills-de7ee",
+            storageBucket: "bills-de7ee.firebasestorage.app",
+            messagingSenderId: "970664008722",
+            appId: "1:970664008722:web:d84829f233a6d40f6bcccb",
+            measurementId: "G-WHSRHW81E0"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const allPages = ["dashboard","stock_check","items","suppliers","locations","users","direct_add","po","grn","transfer_out","transfer_in","verification","bincard","reports","billing"];
 
         async function initSystem() {
             try {
-                await db.open();
-
                 // 1. Ensure a Location exists
-                const locCount = await db.locations.count();
-                if (locCount === 0) {
-                    const allPages = ["dashboard","stock_check","items","suppliers","locations","users","direct_add","po","grn","transfer_out","transfer_in","verification","bincard","reports","billing"];
-                    await db.locations.add({
+                const locSnap = await getDocs(collection(db, "locations"));
+                if (locSnap.empty) {
+                    await addDoc(collection(db, "locations"), {
                         name: "Main Warehouse", 
                         remark: "Global HQ", 
                         pages: allPages
@@ -88,10 +88,9 @@
                 }
 
                 // 2. Ensure Master Admin exists
-                const userCount = await db.users.count();
-                if (userCount === 0) {
-                    const allPages = ["dashboard","stock_check","items","suppliers","locations","users","direct_add","po","grn","transfer_out","transfer_in","verification","bincard","reports","billing"];
-                    await db.users.add({
+                const userSnap = await getDocs(query(collection(db, "users"), where("username", "==", "admin"), limit(1)));
+                if (userSnap.empty) {
+                    await addDoc(collection(db, "users"), {
                         fullName: "Master Admin", 
                         username: "admin", 
                         password: "admin123", 
@@ -101,52 +100,52 @@
                 }
 
                 // 3. Populate Location Dropdown
-                const locs = await db.locations.toArray();
+                const locs = await getDocs(collection(db, "locations"));
                 const sel = document.getElementById('l');
-                sel.innerHTML = locs.map(x => `<option value="${x.name}">${x.name}</option>`).join('');
+                sel.innerHTML = locs.docs.map(doc => `<option value="${doc.data().name}">${doc.data().name}</option>`).join('');
                 
                 // 4. Activate UI
-                document.getElementById('db-status').innerHTML = '<span class="status-badge bg-green-100 text-green-600">System Online</span>';
+                document.getElementById('db-status').innerHTML = '<span class="status-badge bg-green-100 text-green-600">Cloud Online</span>';
                 const btn = document.getElementById('loginBtn');
                 btn.disabled = false;
                 btn.innerText = "Authorized Entry";
 
             } catch (e) {
                 console.error(e);
-                document.getElementById('err').innerText = "DATABASE ERROR: Please try 'Reset System Database'";
-                document.getElementById('err').classList.remove('hidden');
+                showErr("FIREBASE ERROR: Check console for configuration issues.");
             }
         }
 
-        async function login() {
+        async function login(e) {
+            e.preventDefault();
             const u = document.getElementById('u').value.trim();
             const p = document.getElementById('p').value.trim();
             const l = document.getElementById('l').value;
-            const err = document.getElementById('err');
             
-            err.classList.add('hidden');
+            document.getElementById('err').classList.add('hidden');
 
             try {
-                const matchedUser = await db.users.where({username: u}).first();
+                const q = query(collection(db, "users"), where("username", "==", u), limit(1));
+                const querySnapshot = await getDocs(q);
 
-                if (matchedUser && matchedUser.password === p) {
-                    // Check location permission
-                    if (matchedUser.username === 'admin' || matchedUser.allowedLocs.includes(l)) {
-                        
-                        // Set Session Data
-                        sessionStorage.setItem('user', JSON.stringify(matchedUser));
-                        sessionStorage.setItem('loc', l);
-                        
-                        // Transition to main
-                        window.location.href = 'main.html';
+                if (!querySnapshot.empty) {
+                    const matchedUser = querySnapshot.docs[0].data();
+                    if (matchedUser.password === p) {
+                        if (matchedUser.username === 'admin' || matchedUser.allowedLocs.includes(l)) {
+                            sessionStorage.setItem('user', JSON.stringify(matchedUser));
+                            sessionStorage.setItem('loc', l);
+                            window.location.href = 'main.html';
+                        } else {
+                            showErr("ACCESS DENIED: No permission for this location.");
+                        }
                     } else {
-                        showErr("ACCESS DENIED: No permission for this location.");
+                        showErr("INVALID: Password incorrect.");
                     }
                 } else {
-                    showErr("INVALID: Username or Password incorrect.");
+                    showErr("INVALID: Username not found.");
                 }
             } catch (e) {
-                showErr("SYSTEM ERROR: Failed to query database.");
+                showErr("CLOUD ERROR: Failed to query database.");
             }
         }
 
@@ -156,13 +155,7 @@
             err.classList.remove('hidden');
         }
 
-        async function forceWipe() {
-            if(confirm("WIPE ALL DATA? Use this only if the login is broken.")) {
-                await Dexie.delete("IMS_ELITE_PRO");
-                window.location.reload();
-            }
-        }
-
+        document.getElementById('loginForm').onsubmit = login;
         window.onload = initSystem;
     </script>
 </body>
