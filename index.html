@@ -1,61 +1,124 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IMS ELITE | Secure Login</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background: #0f172a; height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .login-card { background: white; width: 400px; padding: 40px; border-radius: 24px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); border: 1px solid rgba(255,255,255,0.1); }
-        .inp { width: 100%; padding: 14px; border: 2px solid #e2e8f0; border-radius: 12px; margin-bottom: 16px; outline: none; font-weight: 600; transition: 0.3s; }
-        .inp:focus { border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
-        .btn-login { width: 100%; background: #3b82f6; color: white; padding: 16px; border-radius: 12px; font-weight: 800; text-transform: uppercase; cursor: pointer; transition: 0.3s; border: none; }
-        .btn-login:hover:not(:disabled) { background: #2563eb; transform: translateY(-2px); }
-        .btn-login:disabled { background: #94a3b8; cursor: not-allowed; opacity: 0.7; }
-        .status-badge { font-size: 10px; padding: 4px 12px; border-radius: 20px; font-weight: 900; text-transform: uppercase; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0f172a;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .input-field {
+            transition: all 0.3s ease;
+            border: 2px solid #e2e8f0;
+        }
+
+        .input-field:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+            outline: none;
+        }
+
+        .animate-enter {
+            animation: enter 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes enter {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
     </style>
 </head>
+
 <body>
 
-    <div class="login-card">
-        <div class="text-center mb-10">
-            <h1 class="text-4xl font-black italic tracking-tighter text-slate-800">IMS<span class="text-blue-600">ELITE</span></h1>
-            <div id="db-status" class="mt-2">
-                <span class="status-badge bg-orange-100 text-orange-600 animate-pulse">Connecting to Cloud...</span>
-            </div>
+    <div class="glass-panel w-full max-w-md p-8 rounded-3xl shadow-2xl animate-enter relative overflow-hidden">
+        <!-- Decorative Background Elements -->
+        <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
+
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-black italic tracking-tighter text-slate-800 mb-2">IMS<span
+                    class="text-blue-600">ELITE</span></h1>
+            <p class="text-slate-500 text-xs font-bold uppercase tracking-widest">Advanced Inventory Control</p>
         </div>
 
-        <form id="loginForm">
-            <div class="space-y-1 mb-4">
-                <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Identity</label>
-                <input type="text" id="u" placeholder="Username" class="inp" required>
-            </div>
-            
-            <div class="space-y-1 mb-4">
-                <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Passkey</label>
-                <input type="password" id="p" placeholder="••••••••" class="inp" required>
+        <form id="loginForm" class="space-y-5">
+            <div>
+                <label
+                    class="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1">Username</label>
+                <input type="text" id="username"
+                    class="input-field w-full p-3 rounded-xl font-bold text-slate-700 bg-slate-50"
+                    placeholder="Enter ID" required>
             </div>
 
-            <div class="space-y-1 mb-6">
-                <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Access Point</label>
-                <select id="l" class="inp cursor-pointer bg-slate-50">
-                    <option value="" disabled selected>Loading Locations...</option>
-                </select>
+            <div>
+                <label
+                    class="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1">Password</label>
+                <input type="password" id="password"
+                    class="input-field w-full p-3 rounded-xl font-bold text-slate-700 bg-slate-50"
+                    placeholder="••••••••" required>
             </div>
-            
-            <button type="submit" id="loginBtn" class="btn-login" disabled>Syncing...</button>
+
+            <div>
+                <label class="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1">Select
+                    Location</label>
+                <div class="relative">
+                    <select id="location"
+                        class="input-field w-full p-3 rounded-xl font-bold text-slate-700 bg-slate-50 appearance-none cursor-pointer">
+                        <option value="" disabled selected>Connecting to Cloud...</option>
+                    </select>
+                    <div class="absolute right-4 top-4 pointer-events-none text-slate-400">
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path
+                                d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" id="btn-login"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all transform hover:scale-[1.02] shadow-lg shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed">
+                Access System
+            </button>
         </form>
 
-        <div id="err" class="mt-4 text-center text-xs font-bold text-red-500 hidden bg-red-50 p-3 rounded-lg border border-red-100"></div>
+        <div id="error-msg" class="hidden mt-6 p-3 bg-red-50 border border-red-100 rounded-lg flex items-center gap-3">
+            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span class="text-xs font-bold text-red-600" id="error-text">Error Message</span>
+        </div>
 
-        <div class="mt-8 pt-6 border-t border-slate-100 text-center">
-            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2">Master Credentials</p>
-            <code class="text-xs bg-slate-100 px-3 py-1 rounded-md text-slate-600 font-bold">admin / admin123</code>
+        <div class="mt-8 text-center">
+            <span class="text-[10px] font-bold text-slate-300">SYSTEM V2.0.0</span>
         </div>
     </div>
 
+    <!-- Firebase Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, getDocs, addDoc, query, where, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -73,90 +136,134 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        const allPages = ["dashboard","stock_check","items","suppliers","locations","users","direct_add","po","grn","transfer_out","transfer_in","verification","bincard","reports","billing"];
+        // Constants matching Main App
+        const ALL_PAGES = ["dashboard", "stock_check", "items", "suppliers", "locations", "users", "direct_add", "po", "grn", "transfer_out", "transfer_in", "verification", "bincard", "reports", "billing"];
 
-        async function initSystem() {
+        async function init() {
             try {
-                // 1. Ensure a Location exists
-                const locSnap = await getDocs(collection(db, "locations"));
-                if (locSnap.empty) {
+                // 1. Ensure Main Warehouse Exists
+                const locsSnap = await getDocs(collection(db, "locations"));
+                if (locsSnap.empty) {
                     await addDoc(collection(db, "locations"), {
-                        name: "Main Warehouse", 
-                        remark: "Global HQ", 
-                        pages: allPages
+                        name: "Main Warehouse",
+                        remark: "System Default",
+                        pages: ALL_PAGES
                     });
                 }
 
-                // 2. Ensure Master Admin exists
-                const userSnap = await getDocs(query(collection(db, "users"), where("username", "==", "admin"), limit(1)));
-                if (userSnap.empty) {
+                // 2. Ensure Master Admin Exists
+                const usersSnap = await getDocs(query(collection(db, "users"), where("username", "==", "admin")));
+                if (usersSnap.empty) {
                     await addDoc(collection(db, "users"), {
-                        fullName: "Master Admin", 
-                        username: "admin", 
-                        password: "admin123", 
-                        allowedLocs: ["Main Warehouse"], 
-                        permissions: allPages
+                        fullName: "Master Admin",
+                        username: "admin",
+                        password: "admin123",
+                        allowedLocs: ["Main Warehouse"], // Admin gets access to created loc
+                        permissions: ALL_PAGES
                     });
                 }
 
-                // 3. Populate Location Dropdown
-                const locs = await getDocs(collection(db, "locations"));
-                const sel = document.getElementById('l');
-                sel.innerHTML = locs.docs.map(doc => `<option value="${doc.data().name}">${doc.data().name}</option>`).join('');
-                
-                // 4. Activate UI
-                document.getElementById('db-status').innerHTML = '<span class="status-badge bg-green-100 text-green-600">Cloud Online</span>';
-                const btn = document.getElementById('loginBtn');
-                btn.disabled = false;
-                btn.innerText = "Authorized Entry";
+                // 3. Load Locations into Dropdown
+                const freshLocs = await getDocs(collection(db, "locations"));
+                const select = document.getElementById('location');
+                select.innerHTML = `<option value="" disabled selected>Select Location</option>`;
 
-            } catch (e) {
-                console.error(e);
-                showErr("FIREBASE ERROR: Check console for configuration issues.");
+                freshLocs.forEach(doc => {
+                    const data = doc.data();
+                    const opt = document.createElement('option');
+                    opt.value = data.name; // Use name as ID for simplicity in this user request context
+                    opt.innerText = data.name;
+                    select.appendChild(opt);
+                });
+
+            } catch (error) {
+                console.error("Init Error:", error);
+                showError("Cloud Connection Failed. Check Console.");
             }
         }
 
-        async function login(e) {
+        async function handleLogin(e) {
             e.preventDefault();
-            const u = document.getElementById('u').value.trim();
-            const p = document.getElementById('p').value.trim();
-            const l = document.getElementById('l').value;
-            
-            document.getElementById('err').classList.add('hidden');
+            const u = document.getElementById('username').value.trim();
+            const p = document.getElementById('password').value.trim();
+            const l = document.getElementById('location').value;
+
+            if (!l) return showError("Please select a valid Location.");
+
+            const btn = document.getElementById('btn-login');
+            btn.innerHTML = `<span class="animate-pulse">Authenticating...</span>`;
+            btn.disabled = true;
 
             try {
+                // Fetch User
                 const q = query(collection(db, "users"), where("username", "==", u), limit(1));
-                const querySnapshot = await getDocs(q);
+                const snap = await getDocs(q);
 
-                if (!querySnapshot.empty) {
-                    const matchedUser = querySnapshot.docs[0].data();
-                    if (matchedUser.password === p) {
-                        if (matchedUser.username === 'admin' || matchedUser.allowedLocs.includes(l)) {
-                            sessionStorage.setItem('user', JSON.stringify(matchedUser));
-                            sessionStorage.setItem('loc', l);
-                            window.location.href = 'main.html';
-                        } else {
-                            showErr("ACCESS DENIED: No permission for this location.");
-                        }
-                    } else {
-                        showErr("INVALID: Password incorrect.");
-                    }
-                } else {
-                    showErr("INVALID: Username not found.");
+                if (snap.empty) throw new Error("Invalid Username");
+
+                const userData = snap.docs[0].data();
+
+                // Verify Password
+                if (userData.password !== p) throw new Error("Invalid Password");
+
+                // Verify Location Access (Handle Admin Override if needed, but per request admin is a user)
+                // Assuming Admin acts like a normal user but with all perms in creating script.
+                // However, request said "Master Admin account...". 
+                // We check if 'allowedLocs' includes 'l' OR if user is admin (security fallback)
+                if (userData.username !== 'admin' && !userData.allowedLocs.includes(l)) {
+                    throw new Error("Access Denied to this Location.");
                 }
-            } catch (e) {
-                showErr("CLOUD ERROR: Failed to query database.");
+
+                // Fetch Location Data to get Page Permissions
+                const locQ = query(collection(db, "locations"), where("name", "==", l), limit(1));
+                const locSnap = await getDocs(locQ);
+                if (locSnap.empty) throw new Error("Location data invalid.");
+                const locData = locSnap.docs[0].data();
+
+                // Compute Final Permissions (Intersection of User & Location)
+                // User said "location only have option selected pages... user permissions... tick only that"
+                // So effective permissions = UserPermissions AND LocationPages
+                const userPerms = userData.username === 'admin' ? ALL_PAGES : userData.permissions;
+                const locPerms = locData.pages || [];
+
+                const finalPerms = userPerms.filter(page => locPerms.includes(page));
+
+                if (finalPerms.length === 0 && userData.username !== 'admin') {
+                    throw new Error("No active page permissions for this location.");
+                }
+
+                // Create Session
+                const sessionData = {
+                    user: userData.fullName,
+                    username: userData.username,
+                    loc: l,
+                    perms: finalPerms,
+                    isAdmin: userData.username === 'admin'
+                };
+
+                sessionStorage.setItem('ims_session', JSON.stringify(sessionData));
+
+                // Redirect
+                window.location.href = 'main.html';
+
+            } catch (err) {
+                showError(err.message || "Login Failed");
+                btn.innerHTML = "Access System";
+                btn.disabled = false;
             }
         }
 
-        function showErr(msg) {
-            const err = document.getElementById('err');
-            err.innerText = msg;
-            err.classList.remove('hidden');
+        function showError(msg) {
+            const el = document.getElementById('error-msg');
+            const txt = document.getElementById('error-text');
+            txt.innerText = msg;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 3000);
         }
 
-        document.getElementById('loginForm').onsubmit = login;
-        window.onload = initSystem;
+        document.getElementById('loginForm').onsubmit = handleLogin;
+        init();
     </script>
 </body>
+
 </html>
