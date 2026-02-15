@@ -126,7 +126,7 @@
 
         <!-- User Profile -->
         <div class="h-20 border-t border-slate-800 p-4 flex items-center gap-3 hover:bg-slate-800 transition cursor-pointer"
-            onclick="logout()">
+            onclick="showUserProfile()">
             <div
                 class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-lg shrink-0 border-2 border-slate-600">
                 👤</div>
@@ -137,8 +137,7 @@
             </div>
             <div class="nav-text ml-auto text-slate-500 hover:text-red-400">
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7">
                     </path>
                 </svg>
             </div>
@@ -174,8 +173,8 @@
 
     <!-- GLOBAL COMPONENT: Modal -->
     <div id="modal"
-        class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center z-[100] transition-opacity opacity-0">
-        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl transform scale-95 transition-transform duration-200 flex flex-col max-h-[90vh]"
+        class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center z-[100] transition-opacity opacity-0 p-4">
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl transform scale-95 transition-transform duration-200 flex flex-col max-h-[90vh] m-auto"
             id="modal-panel">
             <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl">
                 <h3 id="m-title" class="text-lg font-black text-slate-800 uppercase tracking-tight">Title</h3>
@@ -396,32 +395,48 @@
 
             let val = 0, exp = 0, low = 0, short = 0;
             const now = new Date();
-            const warningDate = new Date(); warningDate.setDate(now.getDate() + 30); // 30 Days Warning
+            const warningDate = new Date();
+            warningDate.setMonth(warningDate.getMonth() + 6); // 6 Months Warning
 
+            // 1. Calculate Per Item Total Qty for Low Stock
+            const itemTotals = {};
             stocks.forEach(s => {
                 const item = items.find(i => i.code === s.itemCode);
+
+                // Value
                 if (item) val += (s.qty * (item.cost || 0));
 
-                if (s.qty < 10) low++;
-
+                // Expiry Logic (Batch-wise)
                 if (s.exp && s.exp.includes('-')) {
                     const d = new Date(s.exp);
-                    if (d < now) exp++;
-                    else if (d < warningDate) short++;
+                    if (d < now && s.qty > 0) exp++;
+                    else if (d < warningDate && s.qty > 0) short++;
                 }
+
+                // Aggregate for Low Stock
+                if (!itemTotals[s.itemCode]) itemTotals[s.itemCode] = 0;
+                itemTotals[s.itemCode] += s.qty;
+            });
+
+            // 2. Check Low Stock (Total Qty < Min Level)
+            items.forEach(i => {
+                const total = itemTotals[i.code] || 0;
+                // Default min level is 10 if not set
+                const min = i.minLevel || 10;
+                if (total < min) low++;
             });
 
             const cards = [
                 { l: 'Stock Value', v: formatCurrency(val), c: 'blue', fn: 'val' },
                 { l: 'Expired Items', v: exp, c: 'red', fn: 'exp' },
-                { l: 'Short Expiry (30 Days)', v: short, c: 'orange', fn: 'short' },
+                { l: 'Short Expiry (6 Months)', v: short, c: 'orange', fn: 'short' },
                 { l: 'Low Stock Alerts', v: low, c: 'yellow', fn: 'low' }
             ];
 
             const html = cards.map(c => `
-                <div onclick="dashDetail('${c.fn}')" class="card p-6 border-l-4 border-${c.c}-500 cursor-pointer hover:bg-${c.c}-50 transition">
+                <div onclick="dashDetail('${c.fn}')" class="card p-6 border-l-4 border-${c.c}-500 cursor-pointer hover:bg-${c.c}-50 transition group">
                     <div class="text-xs font-bold uppercase text-slate-400 mb-2">${c.l}</div>
-                    <div class="text-3xl font-black text-${c.c}-600">${c.v}</div>
+                    <div class="${c.fn === 'val' ? 'text-2xl tracking-tight' : 'text-3xl'} font-black text-${c.c}-600 truncate group-hover:whitespace-normal group-hover:break-words text-wrap" title="${c.v}">${c.v}</div>
                 </div>`).join('');
 
             document.getElementById('dash-grid').innerHTML = html;
@@ -431,22 +446,99 @@
             const stocks = (await getDocs(query(collection(db, "stocks"), where("loc", "==", session.loc)))).docs.map(d => d.data());
             const items = (await getDocs(collection(db, "items"))).docs.map(d => d.data());
             const now = new Date();
-            const warningDate = new Date(); warningDate.setDate(now.getDate() + 30);
+            const warningDate = new Date(); warningDate.setMonth(warningDate.getMonth() + 6);
 
-            let filtered = [];
             let r = '';
+            let title = '';
 
-            if (type === 'val') filtered = stocks;
-            if (type === 'exp') filtered = stocks.filter(s => s.exp && new Date(s.exp) < now);
-            if (type === 'short') filtered = stocks.filter(s => s.exp && new Date(s.exp) > now && new Date(s.exp) < warningDate);
-            if (type === 'low') filtered = stocks.filter(s => s.qty < 10);
+            if (type === 'val') {
+                title = 'Stock Valuation';
+                // Group by Item
+                const grouped = {};
+                stocks.forEach(s => {
+                    if (!grouped[s.itemCode]) grouped[s.itemCode] = 0;
+                    grouped[s.itemCode] += s.qty;
+                });
+                r = Object.keys(grouped).map(k => {
+                    const i = items.find(x => x.code === k);
+                    const cost = i?.cost || 0;
+                    const tot = grouped[k] * cost;
+                    return `<tr><td>${k}</td><td>${i?.name}</td><td>${grouped[k]}</td><td>${formatCurrency(cost)}</td><td>${formatCurrency(tot)}</td></tr>`;
+                }).join('');
+                r = `<table class="w-full text-left text-sm"><thead><tr class="bg-slate-100"><th>Code</th><th>Item</th><th>Total Qty</th><th>Cost</th><th>Total Value</th></tr></thead><tbody>${r}</tbody></table>`;
+            }
+            if (type === 'exp') {
+                title = 'Expired Batches';
+                const filtered = stocks.filter(s => s.exp && new Date(s.exp) < now && s.qty > 0);
+                r = filtered.map(s => {
+                    const i = items.find(x => x.code === s.itemCode);
+                    return `<tr><td>${s.itemCode}</td><td>${i?.name || '-'}</td><td class="text-red-600 font-bold">${s.qty}</td><td>${s.exp}</td></tr>`;
+                }).join('');
+                r = `<table class="w-full text-left text-sm"><thead><tr class="bg-slate-100"><th>Item</th><th>Name</th><th>Qty</th><th>Exp</th></tr></thead><tbody>${r}</tbody></table>`;
+            }
+            if (type === 'short') {
+                title = 'Short Expiry (Next 6 Months)';
+                const filtered = stocks.filter(s => s.exp && new Date(s.exp) > now && new Date(s.exp) < warningDate && s.qty > 0);
+                r = filtered.map(s => {
+                    const i = items.find(x => x.code === s.itemCode);
+                    return `<tr><td>${s.itemCode}</td><td>${i?.name || '-'}</td><td class="text-orange-600 font-bold">${s.qty}</td><td>${s.exp}</td></tr>`;
+                }).join('');
+                r = `<table class="w-full text-left text-sm"><thead><tr class="bg-slate-100"><th>Item</th><th>Name</th><th>Qty</th><th>Exp</th></tr></thead><tbody>${r}</tbody></table>`;
+            }
+            if (type === 'low') {
+                title = 'Low Stock Items';
+                const itemTotals = {};
+                stocks.forEach(s => {
+                    if (!itemTotals[s.itemCode]) itemTotals[s.itemCode] = 0;
+                    itemTotals[s.itemCode] += s.qty;
+                });
+                // Filter Items
+                const lowItems = items.filter(i => {
+                    const t = itemTotals[i.code] || 0;
+                    return t < (i.minLevel || 10);
+                });
 
-            r = filtered.map(s => {
-                const i = items.find(x => x.code === s.itemCode);
-                return `<tr><td>${s.itemCode}</td><td>${i?.name || '-'}</td><td>${s.qty}</td><td>${s.exp}</td></tr>`;
-            }).join('');
+                r = lowItems.map(i => `<tr><td>${i.code}</td><td>${i.name}</td><td class="text-red-600 font-bold">${itemTotals[i.code] || 0}</td><td>${i.minLevel || 10}</td></tr>`).join('');
+                r = `<table class="w-full text-left text-sm"><thead><tr class="bg-slate-100"><th>Code</th><th>Name</th><th>Current Total</th><th>Min Level</th></tr></thead><tbody>${r}</tbody></table>`;
+            }
 
-            openModal("Details", `<div class="max-h-96 overflow-auto"><table class="w-full text-left text-sm"><thead><tr class="bg-slate-100"><th>Item</th><th>Name</th><th>Qty</th><th>Exp</th></tr></thead><tbody>${r}</tbody></table></div>`);
+            openModal(title, `<div class="max-h-96 overflow-auto">${r}</div>`);
+        };
+
+        window.showUserProfile = async () => {
+            // Fetch full user details
+            const q = query(collection(db, "users"), where("username", "==", session.user));
+            const snap = await getDocs(q);
+            const u = snap.empty ? {} : snap.docs[0].data();
+            const locs = u.accessLocs ? u.accessLocs.join(', ') : 'All/None';
+            const pages = u.accessPages ? u.accessPages.join(', ') : 'All';
+
+            openModal("User Profile", `
+                <div class="text-center mb-6">
+                    <div class="w-20 h-20 rounded-full bg-slate-200 mx-auto flex items-center justify-center text-4xl mb-3 border-4 border-white shadow-lg">👤</div>
+                    <div class="text-2xl font-black text-slate-800">${u.fullName || session.user}</div>
+                    <div class="text-sm font-bold text-blue-500 uppercase tracking-widest">${u.role || 'User'}</div>
+                </div>
+                <div class="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-3 mb-6">
+                    <div class="flex justify-between border-b border-slate-200 pb-2">
+                        <span class="text-xs font-bold text-slate-400 uppercase">Username</span>
+                        <span class="font-bold text-slate-700">${u.username}</span>
+                    </div>
+                     <div class="flex justify-between border-b border-slate-200 pb-2">
+                        <span class="text-xs font-bold text-slate-400 uppercase">Current Location</span>
+                        <span class="font-bold text-slate-700">${session.loc}</span>
+                    </div>
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase block mb-1">Access Locations</span>
+                        <div class="flex flex-wrap gap-1">${u.accessLocs ? u.accessLocs.map(l => `<span class="px-2 py-0.5 bg-white border rounded text-xs font-bold text-slate-600">${l}</span>`).join('') : '-'}</div>
+                    </div>
+                    <div>
+                         <span class="text-xs font-bold text-slate-400 uppercase block mb-1">Access Pages</span>
+                         <div class="flex flex-wrap gap-1">${u.accessPages ? u.accessPages.map(p => `<span class="px-2 py-0.5 bg-blue-50 border border-blue-100 rounded text-xs font-bold text-blue-600 uppercase">${p}</span>`).join('') : '-'}</div>
+                    </div>
+                </div>
+                <button onclick="logout()" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-red-200 transition">Log Out</button>
+             `, ``);
         };
 
         // === 2. ITEMS MASTER ===
@@ -1081,7 +1173,7 @@
                     <div class="grid grid-cols-4 gap-2">
                         <div><label class="text-[10px] font-bold uppercase text-slate-400">Rcv Qty</label><input type="number" class="w-full border rounded p-1 g-qty" value="${x.qty}"></div>
                         <div><label class="text-[10px] font-bold uppercase text-slate-400">Free</label><input type="number" class="w-full border rounded p-1 g-free" value="0"></div>
-                        <div class="col-span-2"><label class="text-[10px] font-bold uppercase text-slate-400">Expiry</label><input type="date" class="w-full border rounded p-1 g-exp"></div>
+                        <div class="col-span-2"><label class="text-[10px] font-bold uppercase text-slate-400">Expiry (YYYY-MM-DD)</label><input type="date" class="w-full border rounded p-1 g-exp" placeholder="YYYY-MM-DD"></div>
                         <div><label class="text-[10px] font-bold uppercase text-slate-400">Total Cost</label><input type="number" class="w-full border rounded p-1 g-cost" value="${itm.cost || 0}"></div>
                         <div><label class="text-[10px] font-bold uppercase text-slate-400">New Sell</label><input type="number" class="w-full border rounded p-1 g-sell" value="${itm.sell || 0}"></div>
                     </div>
@@ -1110,13 +1202,14 @@
             if (validItems.length === 0) return alert("No items with Qty > 0");
 
             const ref = document.getElementById('g-po').innerText;
+            const sup = document.getElementById('g-sup').innerText;
             // Store in temp global because DOM will be destroyed by confirm modal
-            window.tempGRNData = { invItems: validItems, invoice: inv, poRef: ref };
+            window.tempGRNData = { invItems: validItems, invoice: inv, poRef: ref, supplier: sup };
 
             confirmAction("Finalize GRN?", "saveGRNExec");
         };
         window.saveGRNExec = async () => {
-            const { invItems, invoice, poRef } = window.tempGRNData;
+            const { invItems, invoice, poRef, supplier } = window.tempGRNData;
             const validItems = invItems;
 
             const id = await generateID('GRN', 'docs');
@@ -1136,8 +1229,8 @@
                 const stockRef = doc(collection(db, "stocks"));
                 batch.set(stockRef, { itemCode: x.code, loc: session.loc, qty: (x.q + x.f), exp: x.exp, date: new Date().toISOString() });
 
-                // Log
-                await logHistory(x.code, 'GRN', (x.q + x.f), id);
+                // Log - Pass Supplier as fromLoc for GRN context
+                await logHistory(x.code, 'GRN', (x.q + x.f), id, supplier, session.loc);
             }
 
             // Save GRN Doc
@@ -1453,13 +1546,18 @@
         // === 9.5 PRN (Purchase Return) ===
         async function loadPRN() {
             const raw = await getDocs(collection(db, "docs"));
+            // Filter only PRN
             const prnDocs = raw.docs.filter(d => d.data().type === 'PRN').sort((a, b) => new Date(b.data().date) - new Date(a.data().date));
 
             document.getElementById('app').innerHTML = `
                 <div class="flex justify-between items-center mb-6">
                     <div>
-                        <h3 class="font-black text-2xl text-slate-800">Purchase Returns (PRN)</h3>
+                        <h3 class="font-black text-2xl text-slate-800">Purchase Returns</h3>
                         <p class="text-slate-500 text-sm">Return stock to suppliers</p>
+                    </div>
+                    <div class="flex gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+                        <input id="prn-find" placeholder="PRN Number..." class="border-none bg-transparent p-2 text-sm w-48 focus:ring-0 font-medium">
+                        <button onclick="viewOldPRNByNo()" class="bg-rose-100 hover:bg-rose-200 text-rose-600 px-4 rounded-lg font-bold text-xs uppercase tracking-wide transition">Find</button>
                     </div>
                     <button onclick="createPRN()" class="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-rose-200 transition transform active:scale-95 flex items-center gap-2">
                         <span>+ New Return</span>
@@ -1468,16 +1566,20 @@
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                     <table class="w-full text-left">
                         <thead class="bg-slate-50 border-b border-slate-100 uppercase text-xs font-black text-slate-400 tracking-wider">
-                            <tr><th class="p-4">PRN Number</th><th class="p-4">Supplier</th><th class="p-4">Date</th><th class="p-4">Items</th><th class="p-4">Status</th></tr>
+                            <tr><th class="p-4">PRN Number</th><th class="p-4">Supplier</th><th class="p-4">Date</th><th class="p-4">Items</th><th class="p-4">Details</th></tr>
                         </thead>
                         <tbody class="divide-y divide-slate-50">
                              ${prnDocs.map(d => `
-                            <tr>
+                            <tr class="hover:bg-slate-50 transition">
                                 <td class="p-4 font-mono font-bold text-rose-600">${d.data().docNo}</td>
                                 <td class="p-4 font-bold text-slate-700">${d.data().supplier}</td>
                                 <td class="p-4 text-sm">${formatDate(d.data().date)}</td>
                                 <td class="p-4 text-sm">${d.data().items.length} Items</td>
-                                <td class="p-4"><span class="bg-rose-100 text-rose-700 px-2 py-1 rounded text-[10px] font-black uppercase">RETURNED</span></td>
+                                <td class="p-4">
+                                     <button onclick="viewOldPRNByNo('${d.data().docNo}')" class="text-rose-400 hover:text-rose-600 font-bold text-xs bg-transparent p-2 rounded hover:bg-rose-50 transition flex items-center gap-1">
+                                         View / Print
+                                     </button>
+                                </td>
                             </tr>`).join('')}
                         </tbody>
                     </table>
@@ -1485,6 +1587,98 @@
                 </div>
             `;
         }
+
+        window.viewOldPRNByNo = async (inputNo = null) => {
+            const n = inputNo || document.getElementById('prn-find').value.trim();
+            if (!n) return alert("Enter PRN Number");
+
+            const snap = await getDocs(query(collection(db, "docs"), where("docNo", "==", n), where("type", "==", "PRN")));
+            if (snap.empty) return alert("PRN Not Found");
+            const d = snap.docs[0].data();
+
+            const rows = d.items.map(x => `<tr><td>${x.code}</td><td>${x.name || '-'}</td><td>${x.q}</td><td>${x.f}</td><td>${x.exp}</td></tr>`).join('');
+
+            openModal(`PRN Details: ${d.docNo}`, `
+                <div class="grid grid-cols-2 gap-4 mb-4 text-sm bg-rose-50 p-4 rounded border border-rose-100">
+                    <div><b>Date:</b> ${formatDate(d.date)}</div>
+                    <div><b>Supplier:</b> ${d.supplier}</div>
+                    <div><b>Items:</b> ${d.items.length}</div>
+                    <div><b>User:</b> ${session.user}</div>
+                </div>
+                <table class="w-full mt-2 text-sm border text-left mb-6">
+                    <thead class="bg-white"><tr><th class="p-2">Code</th><th class="p-2">Item</th><th class="p-2">Ret Qty</th><th class="p-2">Free</th><th class="p-2">Exp</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <div class="flex gap-2">
+                     <button onclick="printPRN('${snap.docs[0].id}')" class="w-full bg-slate-800 text-white px-6 py-3 rounded-xl font-bold hover:scale-[1.02] transition shadow-lg flex items-center justify-center gap-2">Print PRN</button>
+                     <button onclick="closeModal()" class="w-full bg-slate-200 text-slate-700 px-6 py-3 rounded-xl font-bold">Close</button>
+                </div>
+             `);
+        };
+
+        window.printPRN = async (id) => {
+            try {
+                const d = (await getDoc(doc(db, "docs", id))).data();
+                const totalQty = d.items.reduce((acc, i) => acc + (parseFloat(i.q) || 0), 0);
+
+                const rows = d.items.map((item, idx) => `
+                    <tr>
+                        <td style="padding:8px; border-bottom:1px solid #ddd;">${idx + 1}</td>
+                        <td style="padding:8px; border-bottom:1px solid #ddd;"><b>${item.name || item.code}</b><br><span style="font-size:11px;color:#666">Exp: ${item.exp}</span></td>
+                        <td style="padding:8px; border-bottom:1px solid #ddd; text-align:center;">${item.q}</td>
+                        <td style="padding:8px; border-bottom:1px solid #ddd; text-align:center;">${item.f}</td>
+                        <td style="padding:8px; border-bottom:1px solid #ddd; text-align:right;">-</td>
+                    </tr>
+                `).join('');
+
+                const w = window.open('', '', 'width=900,height=800');
+                w.document.write(`
+                    <html>
+                    <head>
+                        <title>PRN Print - ${d.docNo}</title>
+                        <style>
+                            body { font-family: 'Times New Roman', serif; padding: 40px; color: #000; font-size: 14px; }
+                            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
+                            .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; border: 1px solid #eee; padding: 15px; }
+                            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+                            th { background: #f9f9f9; padding: 10px; border-bottom: 2px solid #000; text-align: left; }
+                            .footer { margin-top: 50px; border-top: 1px solid #ccc; padding-top: 20px; display: flex; justify-content: space-between; font-size: 12px; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <h1 style="margin:0; text-transform:uppercase;">Purchase Return Note</h1>
+                            <h3 style="margin:5px 0; color:#555;">${session.loc} | IMS ELITE</h3>
+                        </div>
+                        <div class="meta-grid">
+                            <div>
+                                <div><b>PRN No:</b> ${d.docNo}</div>
+                                <div><b>Supplier:</b> ${d.supplier}</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div><b>Date:</b> ${new Date(d.date).toLocaleDateString()}</div>
+                                <div><b>User:</b> ${session.user}</div>
+                            </div>
+                        </div>
+                        <table>
+                            <thead><tr><th>#</th><th>Item Description</th><th style="text-align:center">Ret Qty</th><th style="text-align:center">Free</th><th style="text-align:right">Reason</th></tr></thead>
+                            <tbody>
+                                ${rows}
+                            </tbody>
+                        </table>
+                        <div style="text-align:right; font-weight:bold; font-size:16px; margin-bottom:50px;">
+                            Total Returned Items: ${totalQty}
+                        </div>
+                        <div class="footer">
+                             <div>Authorized Signature</div>
+                             <div>Generated by System</div>
+                        </div>
+                    </body>
+                    </html>
+                `);
+                w.print();
+            } catch (e) { alert("Error: " + e.message); }
+        };
 
         window.createPRN = async () => {
             const locs = await getDocs(collection(db, "suppliers"));
@@ -1571,7 +1765,7 @@
                 if (sDoc.exists()) {
                     batch.update(ref, { qty: sDoc.data().qty - (x.qty + x.free) });
                 }
-                // Log
+                // Log - Pass Supplier as toLoc for PRN context
                 await logHistory(x.code, 'PRN', -(x.qty + x.free), id, session.loc, sup);
             }
 
@@ -2198,8 +2392,10 @@
                 const color = x.qty > 0 ? 'text-green-600' : 'text-red-500';
                 // Enhanced details for transfers: show from/to
                 let details = x.docNo;
-                if (x.type === 'TR-OUT') details += ` <span class="text-xs text-slate-400">⟶ ${x.toLoc || '?'}</span>`;
-                if (x.type === 'TR-IN') details += ` <span class="text-xs text-slate-400">⟵ ${x.fromLoc || '?'}</span>`;
+                if (x.type === 'TR-OUT') details += ` <span class="text-xs text-slate-400 block">⟶ ${x.toLoc || '?'}</span>`;
+                if (x.type === 'TR-IN') details += ` <span class="text-xs text-slate-400 block">⟵ ${x.fromLoc || '?'}</span>`;
+                if (x.type === 'GRN') details += ` <span class="text-xs text-slate-400 block">⟵ ${x.fromLoc !== '-' ? x.fromLoc : 'Supplier'}</span>`;
+                if (x.type === 'PRN') details += ` <span class="text-xs text-slate-400 block">⟶ ${x.toLoc !== '-' ? x.toLoc : 'Supplier'}</span>`;
 
                 return `<tr class="border-b hover:bg-slate-50 transition">
                 <td class="p-3 text-sm text-slate-500 font-mono">${new Date(x.date).toLocaleString()}</td>
